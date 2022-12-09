@@ -49,7 +49,7 @@ We could assume that those 2 Contracts suffice for the system we want to build. 
 
 2) *An addition NFT Minting Policy Script will be implemented in order to validate and identify that indeed Alice (and whoever wants to Mint Tokens) has deposited the initial fund and she can mint the Tokens.*
 
-`Smart Contract #3
+`Smart Contract #3`
 
 ```
 NFT Minting Script that will mint a unique identifier token and send it to Alice's address when alice deposits the initial amount of funds in the lock/unlock Script
