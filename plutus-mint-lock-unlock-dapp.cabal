@@ -10,7 +10,8 @@ Copyright:          © 2022 Tasos Valtinos
 
 library
   hs-source-dirs:      src
-  exposed-modules:     LockScript
+  exposed-modules:     LockScript,
+                       Utils
   build-depends:       aeson
                      , base ^>=4.14.1.0
                      , bytestring

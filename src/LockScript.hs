@@ -39,8 +39,10 @@ import qualified         Data.Aeson                  (decode, encode)
 import qualified Ledger.Address                       as LAD
 import qualified Plutus.Script.Utils.V1.Typed.Scripts as PSU.V1
 import qualified Plutus.Script.Utils.V2.Typed.Scripts as PSU.V2
+import qualified Plutus.Script.Utils.V2.Typed.Scripts.Validators as PSUV.V2
 import qualified Plutus.V1.Ledger.Api                 as PlutusV1
 import qualified Plutus.V1.Ledger.Contexts            as PlutusV1
+import qualified Plutus.V1.Ledger.Scripts             as PLV1
 import qualified Plutus.V2.Ledger.Api                 as PlutusV2
 import qualified Plutus.V2.Ledger.Contexts            as PlutusV2
 import           PlutusTx                             (getPir)
@@ -72,7 +74,7 @@ import qualified Cardano.Ledger.BaseTypes    as LBST (TxIx (..), CertIx (..))
 data LockDatum = LockDatum {
 
     depositAmount :: !Integer,
-    ownerKeyHash  :: !Plutus.PaymentPubKeyHash
+    ownerKeyHash  :: Plutus.PaymentPubKeyHash
 
 } deriving (Show, FromJSON, ToJSON, Generic)
 
@@ -115,39 +117,19 @@ lockScript dt rd ctx =
       checkMin = depositAmount dt >= 10000000
 
       checkPass :: Bool
-      checkPass = pasw == 42
+      checkPass = case rd of 
+                    Unlock amt psw -> psw == (42 :: Integer)
+                    _              -> False
 
       checkAmou :: Bool
-      checkAmou = amt == depositAmount dt
+      checkAmou = case rd of
+                   Unlock amt _ -> amt == depositAmount dt
+                   _            -> False
 
-
-data Lock
-instance Scripts.ValidatorTypes Lock where
-    type instance DatumType Lock = LockDatum
-    type instance RedeemerType Lock = UserAction
-
-typedValidator :: Scripts.TypedValidator Lock
-typedValidator = Scripts.mkTypedValidator @Lock
-    $$(PlutusTx.compile [|| lockScript ||])
-    $$(PlutusTx.compile [|| wrap ||])
-  where
-    wrap = Scripts.wrapValidator @LockDatum @UserAction
-
-validator :: Validator
-validator = Scripts.validatorScript typedValidator
-
-
--- lockValidator :: PlutusV2.Validator
--- lockValidator = PlutusV2.mkValidatorScript $$(PlutusTx.compile [|| lockScript ||])
-
--- Solution is in this link
--- https://github.com/input-output-hk/plutus-apps/blob/main/plutus-use-cases/src/Plutus/Contracts/Vesting.hs
--- https://www.youtube.com/watch?v=HoB_PqeZPNc&list=PLNEK_Ejlx3x0mhPmOjPSHZPtTFpfJo3Nd&index=3&ab_channel=IOGAcademy
--- TYped vs Untype scripts
-
--- parameterize is with LockParams
-
-
+typedValidator :: PlutusV2.Validator 
+typedValidator = PLV1.mkValidatorScript $$(PlutusTx.compile [|| wrap ||])
+   where
+      wrap = PSUV.V2.mkUntypedValidator lockScript
 
 lockingScript :: PlutusV2.Script
-lockingScript = PlutusV2.unValidatorScript lockValidator
+lockingScript = PlutusV2.unValidatorScript typedValidator
