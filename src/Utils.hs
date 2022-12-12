@@ -66,6 +66,7 @@ import qualified Cardano.Ledger.BaseTypes    as LBST (TxIx (..), CertIx (..))
 
 --------------------------------------------------------
 --------------------------------------------------------
+-- All helper functions to be used will be in this file 
 -- ========================= HELPER FUNCTIONS MOVE =====
 
 dataToScriptData :: PlutusTx.Data -> Cardano.ScriptData
