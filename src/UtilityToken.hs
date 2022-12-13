@@ -13,7 +13,7 @@
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE TypeOperators         #-}
 
-module LockScript where
+module UtilityToken where
 
 
 import           Cardano.Api as Cardano
@@ -45,12 +45,13 @@ import qualified Plutus.V1.Ledger.Contexts            as PlutusV1
 import qualified Plutus.V1.Ledger.Scripts             as PLV1
 import qualified Plutus.V2.Ledger.Api                 as PlutusV2
 import qualified Plutus.V2.Ledger.Contexts            as PlutusV2
+import qualified Plutus.V1.Ledger.Ada                 as ADAV1
 import           PlutusTx                             (getPir)
 import           Data.Aeson                  (decode, encode, FromJSON, ToJSON)
 import qualified PlutusTx
 import qualified PlutusTx.Builtins
 import           PlutusTx.Prelude                     as P hiding (Semigroup (..),unless, (.))
-import           Prelude                              (IO, (.), FilePath, Show, String, fromIntegral, show)
+import           Prelude                              (IO, (.), FilePath, Show, String, fromIntegral, show, div)
 import           Prettyprinter.Extras                 (pretty)
 import qualified Ledger                      as Plutus
 import           Cardano.Ledger.Credential   as Ledger
@@ -63,70 +64,68 @@ import           Plutus.V1.Ledger.Crypto     as Plutus
 import qualified Cardano.Ledger.BaseTypes    as LBST (TxIx (..), CertIx (..))
 
 
--- What does it do?
--- Stores info regarding how much ALice deposited
--- 2 Actions, Lock & UNlock the funds
+-- THIS IS THE MINTING POLICY FOR THE UTILITY TOKENS & IT IS BASED
+-- ON THE AMOUNT OF ADA THAT ALICE DEPOSITED TO THE LOCK SCRIPT
 
+-- RATIO 10:1 --> FOR EVERY 10 ADA MINT 1 UTILITY TOKEN
+------------------------------------------------------------
+type AdaValue     = Integer 
+type TokensToMint = Integer
 
-data LockDatum = LockDatum {
+checkRatio :: AdaValue -> TokensToMint -> Bool
+checkRatio av tm = av `div` tm >=  10 
 
-    depositAmount :: !Integer,
-    ownerKeyHash  :: Plutus.PaymentPubKeyHash
+------------------------------------------------------------
+------------------------------------------------------------
+
+data TokenInfo = TokenInfo {
+
+    currencyInfo :: AssetClass,
+    currencyAmt  :: !Integer
 
 } deriving (Show, FromJSON, ToJSON, Generic)
 
-instance Eq LockDatum where
-    {-# INLINABLE (==) #-}
-    LockDatum d1 p1 == LockDatum d2 p2 = p1 == p2 && d1 == d2
 
-PlutusTx.unstableMakeIsData ''LockDatum
+instance Eq TokenInfo where
+    {-# INLINEABLE (==) #-}
+    TokenInfo ci1 ca1 == TokenInfo ci2 ca2 = ci1 == ci2 && ca1 == ca2
 
-type AmountToUnlock = Integer
-type Password       = Integer
+PlutusTx.unstableMakeIsData ''TokenInfo
 
-data UserAction = Lock | Unlock AmountToUnlock Password deriving (Show, FromJSON, ToJSON, Generic)
 
-PlutusTx.makeLift ''UserAction
-PlutusTx.makeIsDataIndexed ''UserAction
- [( 'Lock , 0 ),
-   ( 'Unlock, 1 )
- ]
+tokenPolicy :: () -> () -> PlutusV2.ScriptContext -> Bool
+tokenPolicy _ _ ctx = True
+  where
 
-{-# INLINEABLE lockScript #-}
-lockScript :: LockDatum -> UserAction -> PlutusV2.ScriptContext -> Bool
-lockScript dt rd ctx = 
-    case rd of
-        Lock               -> traceIfFalse "Oops not enough funds" checkMin &&
-                              traceIfFalse "Not correct signature" checkSign
-        Unlock amt pasw    -> traceIfFalse "Oops wrong password" checkPass &&
-                              traceIfFalse "Oops mismatched amount" checkAmou &&
-                              traceIfFalse "Oops not correct signature" checkSign
+    info :: PlutusV2.TxInfo
+    info = PlutusV2.scriptContextTxInfo ctx
+
+    getTxInputs :: [PlutusV2.TxInInfo]
+    getTxInputs = PlutusV2.txInfoInputs info
+
+    getCurrOutputs :: [PlutusV2.TxOut]
+    getCurrOutputs = PlutusV2.txInfoOutputs info
     
-    where
+    getContOutputs :: [PlutusV2.TxOut]
+    getContOutputs = PlutusV2.getContinuingOutputs ctx
 
-      info :: PlutusV2.TxInfo
-      info =  PlutusV2.scriptContextTxInfo ctx
+    getTxReferenceInputs :: [PlutusV2.TxInInfo]
+    getTxReferenceInputs = PlutusV2.txInfoReferenceInputs info
 
-      checkSign :: Bool
-      checkSign = PlutusV2.txSignedBy info $ LAD.unPaymentPubKeyHash $ ownerKeyHash dt
+    hasUniqueNFT :: Bool
+    hasUniqueNFT = case find (\x -> case Value.flattenValue . PlutusV2.txOutValue . PlutusV2.txInInfoResolved $ x of
+                                        [(cs, tn, amt)] -> amt == 1
+                                        _               -> False ) getTxInputs of
+                        Nothing   -> False
+                        Just _    -> True
 
-      checkMin :: Bool
-      checkMin = depositAmount dt >= 10000000
-
-      checkPass :: Bool
-      checkPass = case rd of 
-                    Unlock amt psw -> psw == (42 :: Integer)
-                    _              -> False
-
-      checkAmou :: Bool
-      checkAmou = case rd of
-                   Unlock amt _ -> amt == depositAmount dt
-                   _            -> False
-
-typedValidator :: PlutusV2.Validator 
-typedValidator = PLV1.mkValidatorScript $$(PlutusTx.compile [|| wrap ||])
-   where
-      wrap = PSUV.V2.mkUntypedValidator lockScript
-
-lockingScript :: PlutusV2.Script
-lockingScript = PlutusV2.unValidatorScript typedValidator
+    checkRatioAdaWithToken :: Bool
+    checkRatioAdaWithToken = True 
+    --   where 
+    --     let mintedAmount       = PlutusV2.txInfoMint info
+    --         adaOutput          = filter ( \x -> case Value.flattenValue . PlutusV2.txOutValue $ x of
+    --                                               [(cs, tn, amt)] -> cs == ADAV1.adaSymbol
+    --                                               _               -> False  ) getCurrOutputs
+    --                     -- adaAmountDeposited = case Value.flattenValue . PlutusV2.txOutValue $ (head adaOutput) of
+    --         --                        [(cs, tn, amt)] -> amt
+    --         --                        _               -> 0
