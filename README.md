@@ -1,6 +1,15 @@
 # plutus-mint-lock-unlock-dapp
 This repository has 3 Plutus Smart contracts to implement the design explained in the ReadME file. 
 
+### Status
+-> LockScript Completed
+-> Utility Token Policy -> COmpleted
+-> NFT Identification Policy -> Pending
+-> Offchain TX Construction with Cardano CLI -> Pending
+-> UI with NextJS using Mesh Library to do offchain from browser -> Pending
+
+############################################################################
+
 ## *Trust No Bank*
 
 ### [Assumption]
