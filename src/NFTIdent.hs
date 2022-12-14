@@ -58,3 +58,13 @@ import           Cardano.Ledger.Credential   as Ledger
 
 --- THIS IS THE POLICY FOR THE NFT IDENTIFICATION TOKEN
 --- WHEN A USER DEPOSITS FUNDS TO THE LOCKSCRIPT RECEIVES IT
+
+
+nftPolicy :: () -> PlutusV2.ScriptContext -> Bool
+nftPolicy = True
+
+-- Check minimum amount deposited to be 10 ADA
+
+-- Basically the policy needs a TxOUtRef to specify that the given utxo passed in the function as a parameter
+-- exists and is the same as the one passed in the transaction itself, in that way we know NFT is unique.
+-- ALso check the amount minted == 1
