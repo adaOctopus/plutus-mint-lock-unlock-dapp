@@ -45,7 +45,6 @@ import qualified Plutus.V1.Ledger.Contexts            as PlutusV1
 import qualified Plutus.V1.Ledger.Scripts             as PLV1
 import qualified Plutus.V2.Ledger.Api                 as PlutusV2
 import qualified Plutus.V2.Ledger.Contexts            as PlutusV2
-import qualified Plutus.V1.Ledger.Ada                 as ADAV1
 import           PlutusTx                             (getPir)
 import           Data.Aeson                  (decode, encode, FromJSON, ToJSON)
 import qualified PlutusTx
@@ -53,6 +52,7 @@ import qualified PlutusTx.Builtins
 import           PlutusTx.Prelude                     as P hiding (Semigroup (..),unless, (.))
 import           Prelude                              (IO, (.), FilePath, Show, String, fromIntegral, show, div)
 import           Prettyprinter.Extras                 (pretty)
+import qualified PlutusTx.Prelude            as PPP (divide)
 import qualified Ledger                      as Plutus
 import           Cardano.Ledger.Credential   as Ledger
 import           Cardano.Ledger.Crypto       (StandardCrypto)
@@ -69,32 +69,10 @@ import qualified Cardano.Ledger.BaseTypes    as LBST (TxIx (..), CertIx (..))
 
 -- RATIO 10:1 --> FOR EVERY 10 ADA MINT 1 UTILITY TOKEN
 ------------------------------------------------------------
-type AdaValue     = Integer 
-type TokensToMint = Integer
-
-checkRatio :: AdaValue -> TokensToMint -> Bool
-checkRatio av tm = av `div` tm >=  10 
-
-------------------------------------------------------------
-------------------------------------------------------------
-
-data TokenInfo = TokenInfo {
-
-    currencyInfo :: AssetClass,
-    currencyAmt  :: !Integer
-
-} deriving (Show, FromJSON, ToJSON, Generic)
-
-
-instance Eq TokenInfo where
-    {-# INLINEABLE (==) #-}
-    TokenInfo ci1 ca1 == TokenInfo ci2 ca2 = ci1 == ci2 && ca1 == ca2
-
-PlutusTx.unstableMakeIsData ''TokenInfo
-
-
-tokenPolicy :: () -> () -> PlutusV2.ScriptContext -> Bool
-tokenPolicy _ _ ctx = True
+{-# INLINEABLE tokenPolicy #-}
+tokenPolicy :: () -> PlutusV2.ScriptContext -> Bool
+tokenPolicy _ ctx = traceIfFalse "Not unique NFT owned" hasUniqueNFT &&
+                      traceIfFalse "Not enough ADA deposited to mint the tokens" checkRatioAdaWithToken
   where
 
     info :: PlutusV2.TxInfo
@@ -114,18 +92,67 @@ tokenPolicy _ _ ctx = True
 
     hasUniqueNFT :: Bool
     hasUniqueNFT = case find (\x -> case Value.flattenValue . PlutusV2.txOutValue . PlutusV2.txInInfoResolved $ x of
-                                        [(cs, tn, amt)] -> amt == 1
+                                        [(cs, tn, amt)] -> amt P.== 1
                                         _               -> False ) getTxInputs of
                         Nothing   -> False
                         Just _    -> True
 
     checkRatioAdaWithToken :: Bool
-    checkRatioAdaWithToken = True 
-    --   where 
-    --     let mintedAmount       = PlutusV2.txInfoMint info
-    --         adaOutput          = filter ( \x -> case Value.flattenValue . PlutusV2.txOutValue $ x of
-    --                                               [(cs, tn, amt)] -> cs == ADAV1.adaSymbol
-    --                                               _               -> False  ) getCurrOutputs
-    --                     -- adaAmountDeposited = case Value.flattenValue . PlutusV2.txOutValue $ (head adaOutput) of
-    --         --                        [(cs, tn, amt)] -> amt
-    --         --                        _               -> 0
+    checkRatioAdaWithToken = validateRatio
+      where
+
+        mintedToken :: Value.Value
+        mintedToken = PlutusV2.txInfoMint info
+
+        extractTokenAmount :: Maybe Integer
+        extractTokenAmount = case Value.flattenValue mintedToken of
+                               [(cs, tn, amt)] -> case amt P.== 0 of
+                                                    True ->  Nothing
+                                                    False -> Just amt
+                               _               -> Nothing
+
+        
+        adaOutPut :: [PlutusV2.TxOut]
+        adaOutPut   = filter (\x -> case Value.flattenValue . PlutusV2.txOutValue $ x of 
+                                      [(cs, tn, amt)] -> cs P.== adaSymbol
+                                      _               -> False ) getCurrOutputs
+        
+        adaAmountDeposited :: Maybe Integer
+        adaAmountDeposited = case Value.flattenValue . PlutusV2.txOutValue $ (head adaOutPut) of
+                               [(cs, tn, amt)] -> case amt P.== 0 of
+                                                    True  -> Nothing
+                                                    False -> Just amt
+                               _               -> Nothing
+
+        validateRatio :: Bool 
+        validateRatio = case adaAmountDeposited of
+                          Just n -> case extractTokenAmount of
+                                      Just x  -> PPP.divide n 10 P.== x
+                                      Nothing -> False
+                          Nothing -> False
+
+
+policy :: PlutusV2.MintingPolicy 
+policy = PLV1.mkMintingPolicyScript $$(PlutusTx.compile [|| wrap ||])
+   where
+      wrap = PSU.V2.mkUntypedMintingPolicy tokenPolicy
+
+policyScript :: PlutusV2.Script
+policyScript = PlutusV2.unMintingPolicyScript policy
+
+-- SHORTBYTESTRING
+scriptSBSV2 :: SBS.ShortByteString
+scriptSBSV2 = SBS.toShort . LBS.toStrict $ Codec.serialise policyScript
+
+-- CURRENCY SYMBOL
+
+currencySymbol :: PlutusV2.CurrencySymbol
+currencySymbol = Plutus.scriptCurrencySymbol policy
+
+
+-- FINAL SERIALIZATION STEP
+serialisedScriptV2 :: PlutusScript PlutusScriptV2
+serialisedScriptV2 = PlutusScriptSerialised scriptSBSV2
+
+writeSerialisedScriptV2 :: IO ()
+writeSerialisedScriptV2 = void $ writeFileTextEnvelope "utility-token.plutus" Nothing serialisedScriptV2
