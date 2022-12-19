@@ -60,11 +60,67 @@ import           Cardano.Ledger.Credential   as Ledger
 --- WHEN A USER DEPOSITS FUNDS TO THE LOCKSCRIPT RECEIVES IT
 
 
-nftPolicy :: () -> PlutusV2.ScriptContext -> Bool
-nftPolicy = True
+nftPolicy :: PlutusV2.TxOutRef -> () -> PlutusV2.ScriptContext -> Bool
+nftPolicy txo _ ctx = traceIfFalse "Not enough ADA Locked" depositsEnoughAda &&
+                      traceIfFalse "Wrong amount minted" checkNFTAmount
+  where
+    info :: PlutusV2.TxInfo
+    info = PlutusV2.scriptContextTxInfo ctx
 
--- Check minimum amount deposited to be 10 ADA
+    getTxInputs :: [PlutusV2.TxInInfo]
+    getTxInputs = PlutusV2.txInfoInputs info
 
--- Basically the policy needs a TxOUtRef to specify that the given utxo passed in the function as a parameter
--- exists and is the same as the one passed in the transaction itself, in that way we know NFT is unique.
--- ALso check the amount minted == 1
+    hasTheUtxo :: Bool
+    hasTheUtxo = any (\input -> PlutusV2.txInInfoOutRef input == txo ) getTxInputs
+
+    getCurrOutputs :: [PlutusV2.TxOut]
+    getCurrOutputs = PlutusV2.txInfoOutputs info
+
+    depositsEnoughAda :: Bool
+    depositsEnoughAda = case Value.flattenValue . PlutusV2.txOutValue . PlutusV2.txInInfoResolved $ head getTxInputs of
+                          [(cs, tn, amt)] -> case amt P.>= 15000000 of
+                                              True -> True
+                                              False -> False
+                          _               -> False
+    
+    checkNFTAmount :: Bool
+    checkNFTAmount = case Value.flattenValue (PlutusV2.txInfoMint info) of
+       [(cs, _, amt)] -> cs  == PlutusV2.ownCurrencySymbol ctx && amt == 1
+       _                -> False
+
+
+{-
+    As a Minting Policy
+-}
+
+policy :: PlutusV2.TxOutRef -> Scripts.MintingPolicy
+policy txo = PlutusV2.mkMintingPolicyScript $
+    $$(PlutusTx.compile [|| wrap ||])
+    `PlutusTx.applyCode`
+     PlutusTx.liftCode txo
+  where
+    wrap txo' = PSU.V2.mkUntypedMintingPolicy $ nftPolicy txo'
+
+{-
+    As a Script
+-}
+
+script :: PlutusV2.TxOutRef -> PlutusV2.Script
+script txo = PlutusV2.unMintingPolicyScript $ policy txo
+
+{-
+    As a Short Byte String
+-}
+
+scriptSBS :: PlutusV2.TxOutRef -> SBS.ShortByteString
+scriptSBS = SBS.toShort . LBS.toStrict . serialise . script
+
+{-
+    As a Serialised Script
+-}
+
+serialisedScript :: PlutusV2.TxOutRef -> PlutusScript PlutusScriptV2
+serialisedScript = PlutusScriptSerialised . scriptSBS
+
+writeSerialisedScript :: PlutusV2.TxOutRef -> IO ()
+writeSerialisedScript txo = void $ writeFileTextEnvelope "nft-mint-V2.plutus" Nothing (serialisedScript txo)

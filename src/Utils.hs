@@ -1,20 +1,21 @@
-{-# LANGUAGE DataKinds             #-}
-{-# LANGUAGE DeriveAnyClass        #-}
-{-# LANGUAGE DeriveGeneric         #-}
-{-# LANGUAGE FlexibleContexts      #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE NoImplicitPrelude     #-}
-{-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE RankNTypes            #-}
-{-# LANGUAGE RecordWildCards       #-}
-{-# LANGUAGE ScopedTypeVariables   #-}
-{-# LANGUAGE TemplateHaskell       #-}
-{-# LANGUAGE TypeApplications      #-}
-{-# LANGUAGE TypeFamilies          #-}
-{-# LANGUAGE TypeOperators         #-}
+-- {-# LANGUAGE DataKinds             #-}
+-- {-# LANGUAGE DeriveAnyClass        #-}
+-- {-# LANGUAGE DeriveGeneric         #-}
+-- {-# LANGUAGE FlexibleContexts      #-}
+-- {-# LANGUAGE MultiParamTypeClasses #-}
+-- {-# LANGUAGE NoImplicitPrelude     #-}
+-- {-# LANGUAGE OverloadedStrings     #-}
+-- {-# LANGUAGE RankNTypes            #-}
+-- {-# LANGUAGE RecordWildCards       #-}
+-- {-# LANGUAGE ScopedTypeVariables   #-}
+-- {-# LANGUAGE TemplateHaskell       #-}
+-- {-# LANGUAGE TypeApplications      #-}
+-- {-# LANGUAGE TypeFamilies          #-}
+-- {-# LANGUAGE TypeOperators         #-}
+{-# LANGUAGE GADTs            #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Utils where
-
 
 import           Cardano.Api as Cardano
 import           Cardano.Api                          (PlutusScriptV1,
@@ -46,10 +47,6 @@ import           PlutusTx                             (getPir)
 import           Data.Aeson                  (decode, encode, FromJSON, ToJSON)
 import qualified PlutusTx
 import qualified PlutusTx.Builtins
-import           PlutusTx.Prelude                     as P hiding
-                                                           (Semigroup (..),
-                                                            unless, (.))
-import           Prelude                              (IO, (.), FilePath, Show, String, fromIntegral, show)
 import           Prettyprinter.Extras                 (pretty)
 -- MOst of these are for the string to pubkeyhash functionality
 import qualified Ledger                      as Plutus
@@ -94,8 +91,8 @@ stakeReferenceLedgerToPlutus StakeRefNull                       = Nothing
 
 
 credentialLedgerToPlutus :: Ledger.Credential a StandardCrypto -> PlutusCr.Credential
-credentialLedgerToPlutus (ScriptHashObj (ScriptHash h)) = PlutusCr.ScriptCredential $ Plutus.ValidatorHash $ toBuiltin $ hashToBytes h
-credentialLedgerToPlutus (KeyHashObj (KeyHash h))       = PlutusCr.PubKeyCredential $ Plutus.PubKeyHash $ toBuiltin $ hashToBytes h
+credentialLedgerToPlutus (ScriptHashObj (ScriptHash h)) = PlutusCr.ScriptCredential $ Plutus.ValidatorHash $ PlutusTx.Builtins.toBuiltin $ hashToBytes h
+credentialLedgerToPlutus (KeyHashObj (KeyHash h))       = PlutusCr.PubKeyCredential $ Plutus.PubKeyHash $ PlutusTx.Builtins.toBuiltin $ hashToBytes h
 
 
 getCredentials :: Plutus.Address -> Maybe (Plutus.PaymentPubKeyHash, Maybe Plutus.StakePubKeyHash)
@@ -114,10 +111,20 @@ getCredentials (Plutus.Address x y) = case x of
 
 
 unsafeReadAddress :: String -> Plutus.Address
-unsafeReadAddress s = DM.fromMaybe (error ()) $ tryReadAddress s
+unsafeReadAddress s = DM.fromMaybe (error "oops incorrect ") $ tryReadAddress s
 
 unsafePaymentPubKeyHash :: Plutus.Address -> Plutus.PaymentPubKeyHash
-unsafePaymentPubKeyHash addr = maybe (error ()) fst $ getCredentials addr
+unsafePaymentPubKeyHash addr = maybe (error "oops incorrect") fst $ getCredentials addr
+
+unsafeReadTxOutRef :: String -> Plutus.TxOutRef
+unsafeReadTxOutRef s =
+  let
+    (x, _ : y) = span (/= '#') s
+  in
+    Plutus.TxOutRef
+        { Plutus.txOutRefId  = fromString x
+        , Plutus.txOutRefIdx = read y
+        }
 
 
 writeJSON :: PlutusTx.ToData a => FilePath -> a -> IO ()
