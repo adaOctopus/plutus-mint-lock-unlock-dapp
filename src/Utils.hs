@@ -127,6 +127,14 @@ unsafeReadTxOutRef s =
         }
 
 
+toBBString :: String -> PlutusTx.Builtins.BuiltinByteString
+toBBString = PlutusTx.Builtins.encodeUtf8 . fromString
+
+toBString :: String -> LBS.ByteString
+toBString = fromString
+
+
+
 writeJSON :: PlutusTx.ToData a => FilePath -> a -> IO ()
 writeJSON file = LBS.writeFile file . Data.Aeson.encode . Cardano.scriptDataToJson Cardano.ScriptDataJsonDetailedSchema . dataToScriptData . PlutusTx.toData
 

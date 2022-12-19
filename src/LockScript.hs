@@ -130,3 +130,21 @@ typedValidator = PLV1.mkValidatorScript $$(PlutusTx.compile [|| wrap ||])
 
 lockingScript :: PlutusV2.Script
 lockingScript = PlutusV2.unValidatorScript typedValidator
+
+
+{-
+    As a Short Byte String
+-}
+
+scriptSBS :: SBS.ShortByteString
+scriptSBS = SBS.toShort . LBS.toStrict . serialise $ lockingScript
+
+{-
+    As a Serialised Script
+-}
+
+serialisedScript :: PlutusScript PlutusScriptV2
+serialisedScript = PlutusScriptSerialised $ scriptSBS
+
+writeSerialisedScript :: IO ()
+writeSerialisedScript = void $ writeFileTextEnvelope "locking-v2.plutus" Nothing serialisedScript

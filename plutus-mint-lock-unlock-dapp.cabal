@@ -39,21 +39,21 @@ library
   default-language:    Haskell2010
   ghc-options:         -Wall -fobject-code -fno-ignore-interface-pragmas -fno-omit-interface-pragmas -fno-strictness -fno-spec-constr -fno-specialise
 
--- executable crypto-policy
---   main-is: crypto-policy.hs
---   hs-source-dirs:      app
---   ghc-options:         -Wall
---   build-depends:       base ^>= 4.14.1.0
---                      , plutus-ledger
---                      , plutus-ledger-api
---                      , plutus-ledger-constraints
---                      , plutus-script-utils
---                      , plutus-script
---                      , plutus-tx
---                      , bytestring
---                      , cardano-api
---                      , plutus-core
---                      , base16-bytestring
---                      , aeson
---                      , text
---                      , cardano-ledger-core
+executable locking-policy
+  main-is: Main.hs
+  hs-source-dirs:      app
+  ghc-options:         -Wall
+  build-depends:       base ^>= 4.14.1.0
+                     , plutus-ledger
+                     , plutus-ledger-api
+                     , plutus-ledger-constraints
+                     , plutus-script-utils
+                     , plutus-mint-dapp
+                     , plutus-tx
+                     , bytestring
+                     , cardano-api
+                     , plutus-core
+                     , base16-bytestring
+                     , aeson
+                     , text
+                     , cardano-ledger-core
