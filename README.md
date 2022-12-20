@@ -5,7 +5,7 @@ This repository has 3 Plutus Smart contracts to implement the design explained i
 -> LockScript Completed  <br/> 
 -> Utility Token Policy -> Completed <br/>
 -> NFT Identification Policy -> Pending <br/>
--> Offchain TX Construction with Cardano CLI -> Pending <br/>
+-> Offchain TX Construction with Cardano CLI -> (1) Lock Funds COmpleted, (2) Unlock FUnds pending <br/>
 -> UI with NextJS using Mesh Library to do offchain from browser -> Pending <br/>
 
 ############################################################################
