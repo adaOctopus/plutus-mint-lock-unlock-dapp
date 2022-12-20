@@ -1,3 +1,6 @@
 dist-newstyle
 *.plutus
 *.addr
+*.signed
+*.body
+env.sh
