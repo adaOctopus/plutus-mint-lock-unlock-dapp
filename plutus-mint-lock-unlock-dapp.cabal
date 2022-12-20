@@ -11,6 +11,7 @@ Copyright:          © 2022 Tasos Valtinos
 library
   hs-source-dirs:      src
   exposed-modules:     LockScript,
+                       LockScriptV2,
                        UtilityToken,
                        Utils,
                        NFTIdent,

@@ -25,6 +25,7 @@ import           Cardano.Api.Shelley                  (PlutusScript (..), Plutus
 
 import qualified Codec.Serialise             as Codec
 import           Codec.Serialise
+import qualified Data.ByteString.Char8       as BS8
 import qualified Data.ByteString.Lazy                 as LBS
 
 import           GHC.Generics           ( Generic )
@@ -40,6 +41,7 @@ import qualified         Data.Aeson                  (decode, encode)
 import qualified Plutus.Script.Utils.V1.Typed.Scripts as PSU.V1
 import qualified Plutus.Script.Utils.V2.Typed.Scripts as PSU.V2
 import qualified Plutus.V1.Ledger.Api                 as PlutusV1
+import qualified Plutus.V1.Ledger.Value               as PValue
 import qualified Plutus.V1.Ledger.Contexts            as PlutusV1
 import qualified Plutus.V2.Ledger.Api                 as PlutusV2
 import qualified Plutus.V2.Ledger.Contexts            as PlutusV2
@@ -47,6 +49,7 @@ import           PlutusTx                             (getPir)
 import           Data.Aeson                  (decode, encode, FromJSON, ToJSON)
 import qualified PlutusTx
 import qualified PlutusTx.Builtins
+import           PlutusTx.Builtins.Internal  (BuiltinByteString (..))
 import           Prettyprinter.Extras                 (pretty)
 -- MOst of these are for the string to pubkeyhash functionality
 import qualified Ledger                      as Plutus
@@ -133,7 +136,13 @@ toBBString = PlutusTx.Builtins.encodeUtf8 . fromString
 toBString :: String -> LBS.ByteString
 toBString = fromString
 
+unsafeTokenNameToHex :: TokenName -> String
+unsafeTokenNameToHex = BS8.unpack . serialiseToRawBytesHex . DM.fromJust . deserialiseFromRawBytes AsAssetName . getByteString . unTokenName
+  where
+    getByteString (BuiltinByteString bs) = bs
 
+getTokenName :: String -> TokenName
+getTokenName = PValue.tokenName . fromString
 
 writeJSON :: PlutusTx.ToData a => FilePath -> a -> IO ()
 writeJSON file = LBS.writeFile file . Data.Aeson.encode . Cardano.scriptDataToJson Cardano.ScriptDataJsonDetailedSchema . dataToScriptData . PlutusTx.toData

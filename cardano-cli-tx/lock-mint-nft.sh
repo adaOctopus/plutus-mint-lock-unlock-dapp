@@ -1,10 +1,19 @@
 cardano-cli transaction build \
 	--babbage-era \
-        --cardano-mode \
+    --cardano-mode \
 	--testnet-magic 1 \
 	--tx-in-collateral 9c8ec6b8e92867383e153d8d6047c70714be12587b178fc34e9168c3d99c7b90#1 \
-        --tx-in 9c8ec6b8e92867383e153d8d6047c70714be12587b178fc34e9168c3d99c7b90#1 \
+    --tx-in 9c8ec6b8e92867383e153d8d6047c70714be12587b178fc34e9168c3d99c7b90#1 \
 	--change-address $(cat ~/Cardano/plutus-vasil/plutus-mint-lock-unlock-dapp/test-addresses/01.addr) \
+	--tx-in 1eb38624f6795c8780b710d3f1c70065dba74bb20a54213e885ee6f9fa3aa05e#0 \
+	--tx-in-script-file ~/Cardano/plutus-vasil/plutus-mint-lock-unlock-dapp/locking-v2.plutus \
+	--tx-in-datum-file  ~/Cardano/plutus-vasil/plutus-mint-lock-unlock-dapp/jsons/datum-lock.json \
+	--tx-in-redeemer-file ~/Cardano/plutus-vasil/plutus-mint-lock-unlock-dapp/jsons/redeemer-lock.json \
 	--tx-out $(cat ~/Cardano/plutus-vasil/plutus-mint-lock-unlock-dapp/lock-script.addr)+100000000 \
-	--tx-datum-file  ~/Cardano/plutus-vasil/plutus-mint-lock-unlock-dapp/jsons/datum-lock.json \
+	--tx-out-datum-embed-file ~/Cardano/plutus-vasil/plutus-mint-lock-unlock-dapp/jsons/datum-lock.json \
+	--mint "1 76e5f937c14564f317ea3fd02a980985bd0d3083dae9e21331d671a0.4c6f636b4e4654" \
+    --mint-script-file ~/Cardano/plutus-vasil/plutus-mint-lock-unlock-dapp/nft-mint-V2.plutus \
+    --mint-redeemer-file ~/Cardano/plutus-vasil/plutus-mint-lock-unlock-dapp/jsons/unit.json \
+	--tx-out $(cat ~/Cardano/plutus-vasil/plutus-mint-lock-unlock-dapp/test-addresses/01.addr)+3000000+"1 76e5f937c14564f317ea3fd02a980985bd0d3083dae9e21331d671a0.4c6f636b4e4654" \
+	--protocol-params-file ~/Cardano/plutus-vasil/plutus-mint-lock-unlock-dapp/test-addresses/protocols.json \
 	--out-file "lock-mint.body" 

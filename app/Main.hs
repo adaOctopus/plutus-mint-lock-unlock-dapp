@@ -29,16 +29,19 @@ import qualified LockScript as LCS
 
 main :: IO ()
 main = do
+    -- FIRST PART IS FOR CONSTRUCTING DATUM, UNCOMMENT IT AND RUN
     [dtFile , amt, owner] <- getArgs
     let amts = read amt :: Integer
-        fwg  = UTL.unsafePaymentPubKeyHash $ UTL.unsafeReadAddress owner
-        -- fwa  = LAD.unPaymentPubKeyHash $ UTL.unsafePaymentPubKeyHash $ UTL.unsafeReadAddress wAddr
+        -- fwg  = UTL.unsafePaymentPubKeyHash $ UTL.unsafeReadAddress owner
+        fwa  = LAD.unPaymentPubKeyHash $ UTL.unsafePaymentPubKeyHash $ UTL.unsafeReadAddress owner
         realDatum = LCS.LockDatum {
 
             LCS.depositAmount = amts,
-            LCS.ownerKeyHash  = fwg
+            LCS.ownerKeyHash  = fwa
         }
     datumJson <- UTL.writeJSON dtFile realDatum
-    print "Everything worked, datum file constructed."
-    print fwg
+
+    -- SECOND PART IS FOR CONSTRUCTING REDEEMER
+    print "Everything worked, JSON file constructed."
+    print fwa
     return ()

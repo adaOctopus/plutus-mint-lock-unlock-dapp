@@ -13,7 +13,7 @@
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE TypeOperators         #-}
 
-module LockScript where
+module LockScriptV2 where
 
 
 import           Cardano.Api as Cardano
@@ -85,23 +85,18 @@ PlutusTx.unstableMakeIsData ''LockDatum
 type AmountToUnlock = Integer
 type Password       = Integer
 
-data UserAction = Lock | Unlock AmountToUnlock Password deriving (Show, FromJSON, ToJSON, Generic)
+data UserAction = Unlock AmountToUnlock Password deriving (Show, FromJSON, ToJSON, Generic)
 
 PlutusTx.makeLift ''UserAction
 PlutusTx.makeIsDataIndexed ''UserAction
- [( 'Lock , 0 ),
+ [
    ( 'Unlock, 1 )
  ]
 
 {-# INLINEABLE lockScript #-}
 lockScript :: LockDatum -> UserAction -> PlutusV2.ScriptContext -> Bool
-lockScript dt rd ctx = 
-    case rd of
-        Lock               -> traceIfFalse "Oops not enough funds" checkMin &&
-                              traceIfFalse "Not correct signature" checkSign
-        Unlock amt pasw    -> traceIfFalse "Oops wrong password" checkPass &&
-                              traceIfFalse "Oops mismatched amount" checkAmou &&
-                              traceIfFalse "Oops not correct signature" checkSign
+lockScript dt rd ctx = traceIfFalse "Oops wrong password" checkPass &&
+                       traceIfFalse "Oops not correct signature" checkSign
     
     where
 
@@ -110,9 +105,6 @@ lockScript dt rd ctx =
 
       checkSign :: Bool
       checkSign = PlutusV2.txSignedBy info $ ownerKeyHash dt
-
-      checkMin :: Bool
-      checkMin = depositAmount dt >= 10000000
 
       checkPass :: Bool
       checkPass = case rd of 
@@ -123,6 +115,16 @@ lockScript dt rd ctx =
       checkAmou = case rd of
                    Unlock amt _ -> amt == depositAmount dt
                    _            -> False
+      
+      getTxInputs :: [PlutusV2.TxInInfo]
+      getTxInputs = PlutusV2.txInfoInputs info
+      
+      depositsEnoughAda :: Bool
+      depositsEnoughAda = case Value.flattenValue . PlutusV2.txOutValue . PlutusV2.txInInfoResolved $ head getTxInputs of
+                            [(cs, tn, amt)] -> case amt P.>= 10000000 of
+                                                True -> True
+                                                False -> False
+                            _               -> False
 
 typedValidator :: PlutusV2.Validator 
 typedValidator = PLV1.mkValidatorScript $$(PlutusTx.compile [|| wrap ||])
