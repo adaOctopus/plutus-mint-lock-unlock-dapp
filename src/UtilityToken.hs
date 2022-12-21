@@ -70,8 +70,8 @@ import qualified Cardano.Ledger.BaseTypes    as LBST (TxIx (..), CertIx (..))
 -- RATIO 10:1 --> FOR EVERY 10 ADA MINT 1 UTILITY TOKEN
 ------------------------------------------------------------
 {-# INLINEABLE tokenPolicy #-}
-tokenPolicy :: () -> PlutusV2.ScriptContext -> Bool
-tokenPolicy _ ctx = traceIfFalse "Not unique NFT owned" hasUniqueNFT &&
+tokenPolicy ::  Plutus.Address -> () -> PlutusV2.ScriptContext -> Bool
+tokenPolicy lca _ ctx = traceIfFalse "Not unique NFT owned" hasUniqueNFT &&
                       traceIfFalse "Not enough ADA deposited to mint the tokens" checkRatioAdaWithToken
   where
 
@@ -97,8 +97,12 @@ tokenPolicy _ ctx = traceIfFalse "Not unique NFT owned" hasUniqueNFT &&
                         Nothing   -> False
                         Just _    -> True
 
+    filterLockScriptAddress :: [PlutusV2.TxOut]
+    filterLockScriptAddress = filter (\outp -> PlutusV2.txOutAddress outp == lca ) getCurrOutputs
+
+    
     checkRatioAdaWithToken :: Bool
-    checkRatioAdaWithToken = validateRatio
+    checkRatioAdaWithToken = depositsEnoughAda
       where
 
         mintedToken :: Value.Value
@@ -111,48 +115,58 @@ tokenPolicy _ ctx = traceIfFalse "Not unique NFT owned" hasUniqueNFT &&
                                                     False -> Just amt
                                _               -> Nothing
 
+        depositsEnoughAda :: Bool
+        depositsEnoughAda = case Value.flattenValue . PlutusV2.txOutValue $ head filterLockScriptAddress of
+                             [(cs, tn, amt)] -> case extractTokenAmount of
+                                                  Just x -> PPP.divide amt 10 P.>= x
+                                                  Nothing -> False       
+                             _               -> False
+
         
-        adaOutPut :: [PlutusV2.TxOut]
-        adaOutPut   = filter (\x -> case Value.flattenValue . PlutusV2.txOutValue $ x of 
-                                      [(cs, tn, amt)] -> cs P.== adaSymbol
-                                      _               -> False ) getCurrOutputs
+        -- adaOutPut :: [PlutusV2.TxOut]
+        -- adaOutPut   = filter (\x -> case Value.flattenValue . PlutusV2.txOutValue $ x of 
+        --                               [(cs, tn, amt)] -> cs P.== adaSymbol
+        --                               _               -> False ) getCurrOutputs
         
-        adaAmountDeposited :: Maybe Integer
-        adaAmountDeposited = case Value.flattenValue . PlutusV2.txOutValue $ (head adaOutPut) of
-                               [(cs, tn, amt)] -> case amt P.== 0 of
-                                                    True  -> Nothing
-                                                    False -> Just amt
-                               _               -> Nothing
+        -- adaAmountDeposited :: Maybe Integer
+        -- adaAmountDeposited = case Value.flattenValue . PlutusV2.txOutValue $ (head adaOutPut) of
+        --                        [(cs, tn, amt)] -> case amt P.== 0 of
+        --                                             True  -> Nothing
+        --                                             False -> Just amt
+        --                        _               -> Nothing
 
-        validateRatio :: Bool 
-        validateRatio = case adaAmountDeposited of
-                          Just n -> case extractTokenAmount of
-                                      Just x  -> PPP.divide n 10 P.== x
-                                      Nothing -> False
-                          Nothing -> False
+        -- validateRatio :: Bool 
+        -- validateRatio = case adaAmountDeposited of
+        --                   Just n -> case extractTokenAmount of
+        --                               Just x  -> PPP.divide n 10 P.>= x
+        --                               Nothing -> False
+        --                   Nothing -> False
 
 
-policy :: PlutusV2.MintingPolicy 
-policy = PLV1.mkMintingPolicyScript $$(PlutusTx.compile [|| wrap ||])
+policy :: Plutus.Address -> PlutusV2.MintingPolicy 
+policy adr = PlutusV2.mkMintingPolicyScript $
+    $$(PlutusTx.compile [|| wrap ||])
+    `PlutusTx.applyCode`
+     PlutusTx.liftCode adr
    where
-      wrap = PSU.V2.mkUntypedMintingPolicy tokenPolicy
+      wrap adr' = PSU.V2.mkUntypedMintingPolicy $ tokenPolicy adr'
 
-policyScript :: PlutusV2.Script
-policyScript = PlutusV2.unMintingPolicyScript policy
+policyScript :: Plutus.Address -> PlutusV2.Script
+policyScript = PlutusV2.unMintingPolicyScript . policy
 
 -- SHORTBYTESTRING
-scriptSBSV2 :: SBS.ShortByteString
-scriptSBSV2 = SBS.toShort . LBS.toStrict $ Codec.serialise policyScript
+scriptSBSV2 :: Plutus.Address -> SBS.ShortByteString
+scriptSBSV2 adr = SBS.toShort . LBS.toStrict $ Codec.serialise $ (policyScript adr)
 
 -- CURRENCY SYMBOL
 
-currencySymbol :: PlutusV2.CurrencySymbol
-currencySymbol = Plutus.scriptCurrencySymbol policy
+currencySymbol :: Plutus.Address -> PlutusV2.CurrencySymbol
+currencySymbol = Plutus.scriptCurrencySymbol . policy
 
 
 -- FINAL SERIALIZATION STEP
-serialisedScriptV2 :: PlutusScript PlutusScriptV2
-serialisedScriptV2 = PlutusScriptSerialised scriptSBSV2
+serialisedScriptV2 :: Plutus.Address -> PlutusScript PlutusScriptV2
+serialisedScriptV2 adr = PlutusScriptSerialised $ (scriptSBSV2 adr)
 
-writeSerialisedScriptV2 :: IO ()
-writeSerialisedScriptV2 = void $ writeFileTextEnvelope "utility-token.plutus" Nothing serialisedScriptV2
+writeSerialisedScriptV2 :: Plutus.Address -> IO ()
+writeSerialisedScriptV2 adr = void $ writeFileTextEnvelope "utility-token.plutus" Nothing (serialisedScriptV2 adr)
