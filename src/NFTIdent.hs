@@ -55,13 +55,15 @@ import           Prettyprinter.Extras                 (pretty)
 import qualified PlutusTx.Prelude            as PPP (divide)
 import qualified Ledger                      as Plutus
 import           Cardano.Ledger.Credential   as Ledger
+import qualified Utils                       as UTL
 
 --- THIS IS THE POLICY FOR THE NFT IDENTIFICATION TOKEN
 --- WHEN A USER DEPOSITS FUNDS TO THE LOCKSCRIPT RECEIVES IT
 
 
-nftPolicy :: PlutusV2.TxOutRef -> () -> PlutusV2.ScriptContext -> Bool
-nftPolicy txo _ ctx = traceIfFalse "Not enough ADA Locked" depositsEnoughAda &&
+
+nftPolicy :: PlutusV2.TxOutRef -> Plutus.Address -> () -> PlutusV2.ScriptContext -> Bool
+nftPolicy txo lca _ ctx = traceIfFalse "Not enough ADA Locked" depositsEnoughAda &&
                       traceIfFalse "Wrong amount minted" checkNFTAmount
   where
     info :: PlutusV2.TxInfo
@@ -70,14 +72,20 @@ nftPolicy txo _ ctx = traceIfFalse "Not enough ADA Locked" depositsEnoughAda &&
     getTxInputs :: [PlutusV2.TxInInfo]
     getTxInputs = PlutusV2.txInfoInputs info
 
+    getTxOutputs :: [PlutusV2.TxOut]
+    getTxOutputs = PlutusV2.txInfoOutputs info
+
     hasTheUtxo :: Bool
     hasTheUtxo = any (\input -> PlutusV2.txInInfoOutRef input == txo ) getTxInputs
 
     getCurrOutputs :: [PlutusV2.TxOut]
     getCurrOutputs = PlutusV2.txInfoOutputs info
 
+    filterLockScriptAddress :: [PlutusV2.TxOut]
+    filterLockScriptAddress = filter (\outp -> PlutusV2.txOutAddress outp == lca ) getTxOutputs
+
     depositsEnoughAda :: Bool
-    depositsEnoughAda = case Value.flattenValue . PlutusV2.txOutValue . PlutusV2.txInInfoResolved $ head getTxInputs of
+    depositsEnoughAda = case Value.flattenValue . PlutusV2.txOutValue $ head filterLockScriptAddress of
                           [(cs, tn, amt)] -> case amt P.>= 15000000 of
                                               True -> True
                                               False -> False
@@ -93,34 +101,36 @@ nftPolicy txo _ ctx = traceIfFalse "Not enough ADA Locked" depositsEnoughAda &&
     As a Minting Policy
 -}
 
-policy :: PlutusV2.TxOutRef -> Scripts.MintingPolicy
-policy txo = PlutusV2.mkMintingPolicyScript $
+policy :: PlutusV2.TxOutRef -> Plutus.Address -> Scripts.MintingPolicy
+policy txo adr = PlutusV2.mkMintingPolicyScript $
     $$(PlutusTx.compile [|| wrap ||])
     `PlutusTx.applyCode`
      PlutusTx.liftCode txo
+     `PlutusTx.applyCode`
+     PlutusTx.liftCode adr
   where
-    wrap txo' = PSU.V2.mkUntypedMintingPolicy $ nftPolicy txo'
+    wrap txo' adr' = PSU.V2.mkUntypedMintingPolicy $ nftPolicy txo' adr'
 
 {-
     As a Script
 -}
 
-script :: PlutusV2.TxOutRef -> PlutusV2.Script
-script txo = PlutusV2.unMintingPolicyScript $ policy txo
+script :: PlutusV2.TxOutRef -> Plutus.Address -> PlutusV2.Script
+script txo adr = PlutusV2.unMintingPolicyScript $ (policy txo adr)
 
 {-
     As a Short Byte String
 -}
 
-scriptSBS :: PlutusV2.TxOutRef -> SBS.ShortByteString
-scriptSBS = SBS.toShort . LBS.toStrict . serialise . script
+scriptSBS :: PlutusV2.TxOutRef -> Plutus.Address -> SBS.ShortByteString
+scriptSBS txo adr = SBS.toShort . LBS.toStrict . serialise $ (script txo adr)
 
 {-
     As a Serialised Script
 -}
 
-serialisedScript :: PlutusV2.TxOutRef -> PlutusScript PlutusScriptV2
-serialisedScript = PlutusScriptSerialised . scriptSBS
+serialisedScript :: PlutusV2.TxOutRef -> Plutus.Address -> PlutusScript PlutusScriptV2
+serialisedScript txo adr = PlutusScriptSerialised $ (scriptSBS txo adr)
 
-writeSerialisedScript :: PlutusV2.TxOutRef -> IO ()
-writeSerialisedScript txo = void $ writeFileTextEnvelope "nft-mint-V2.plutus" Nothing (serialisedScript txo)
+writeSerialisedScript :: PlutusV2.TxOutRef -> Plutus.Address -> IO ()
+writeSerialisedScript txo adr = void $ writeFileTextEnvelope "nft-mint-V2.plutus" Nothing (serialisedScript txo adr)

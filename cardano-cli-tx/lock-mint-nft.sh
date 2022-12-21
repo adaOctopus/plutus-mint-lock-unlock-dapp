@@ -11,7 +11,7 @@ cardano-cli transaction build \
 	--tx-in-redeemer-file ~/Cardano/plutus-vasil/plutus-mint-lock-unlock-dapp/jsons/redeemer-lock.json \
 	--tx-out $(cat ~/Cardano/plutus-vasil/plutus-mint-lock-unlock-dapp/lock-script.addr)+100000000 \
 	--tx-out-datum-embed-file ~/Cardano/plutus-vasil/plutus-mint-lock-unlock-dapp/jsons/datum-lock.json \
-	--mint "1 76e5f937c14564f317ea3fd02a980985bd0d3083dae9e21331d671a0.4c6f636b4e4654" \
+	--mint "1 85d41568c4585589d4e5d0ed8cdc891c5237e4d73dd940acaf87ce94.4c6f636b4e4654" \
     --mint-script-file ~/Cardano/plutus-vasil/plutus-mint-lock-unlock-dapp/nft-mint-V2.plutus \
     --mint-redeemer-file ~/Cardano/plutus-vasil/plutus-mint-lock-unlock-dapp/jsons/unit.json \
 	--tx-out $(cat ~/Cardano/plutus-vasil/plutus-mint-lock-unlock-dapp/test-addresses/01.addr)+3000000+"1 76e5f937c14564f317ea3fd02a980985bd0d3083dae9e21331d671a0.4c6f636b4e4654" \
