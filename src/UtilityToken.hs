@@ -54,14 +54,7 @@ import           Prelude                              (IO, (.), FilePath, Show, 
 import           Prettyprinter.Extras                 (pretty)
 import qualified PlutusTx.Prelude            as PPP (divide)
 import qualified Ledger                      as Plutus
-import           Cardano.Ledger.Credential   as Ledger
-import           Cardano.Ledger.Crypto       (StandardCrypto)
-import           Cardano.Ledger.Keys         (KeyHash (..))
-import           Cardano.Crypto.Hash.Class   (hashToBytes)
-import           Cardano.Ledger.Hashes       (ScriptHash (..))
-import           Plutus.V1.Ledger.Credential as PlutusCr
-import           Plutus.V1.Ledger.Crypto     as Plutus
-import qualified Cardano.Ledger.BaseTypes    as LBST (TxIx (..), CertIx (..))
+import qualified Plutus.V1.Ledger.Address    as PAD
 
 
 -- THIS IS THE MINTING POLICY FOR THE UTILITY TOKENS & IT IS BASED
@@ -87,18 +80,25 @@ tokenPolicy lca _ ctx = traceIfFalse "Not unique NFT owned" hasUniqueNFT &&
     getContOutputs :: [PlutusV2.TxOut]
     getContOutputs = PlutusV2.getContinuingOutputs ctx
 
+    getUserSignature :: Plutus.PubKeyHash
+    getUserSignature = head . PlutusV2.txInfoSignatories $ info
+
+    getUserAddress :: Plutus.Address
+    getUserAddress = PAD.pubKeyHashAddress getUserSignature
+
     getTxReferenceInputs :: [PlutusV2.TxInInfo]
     getTxReferenceInputs = PlutusV2.txInfoReferenceInputs info
 
-    hasUniqueNFT :: Bool
-    hasUniqueNFT = case find (\x -> case Value.flattenValue . PlutusV2.txOutValue . PlutusV2.txInInfoResolved $ x of
-                                        [(cs, tn, amt)] -> amt P.== 1
-                                        _               -> False ) getTxInputs of
-                        Nothing   -> False
-                        Just _    -> True
-
     filterLockScriptAddress :: [PlutusV2.TxOut]
     filterLockScriptAddress = filter (\outp -> PlutusV2.txOutAddress outp == lca ) getCurrOutputs
+
+    filterOwnerOutput :: [PlutusV2.TxOut]
+    filterOwnerOutput =  filter (\outp -> PlutusV2.txOutAddress outp == getUserAddress ) getCurrOutputs
+
+    hasUniqueNFT :: Bool
+    hasUniqueNFT = case Value.flattenValue . PlutusV2.txOutValue $ head filterOwnerOutput of
+                             [(cs, tn, amt)] -> amt P.== 1     
+                             _               -> False
 
     
     checkRatioAdaWithToken :: Bool
@@ -121,26 +121,6 @@ tokenPolicy lca _ ctx = traceIfFalse "Not unique NFT owned" hasUniqueNFT &&
                                                   Just x -> PPP.divide amt 10 P.>= x
                                                   Nothing -> False       
                              _               -> False
-
-        
-        -- adaOutPut :: [PlutusV2.TxOut]
-        -- adaOutPut   = filter (\x -> case Value.flattenValue . PlutusV2.txOutValue $ x of 
-        --                               [(cs, tn, amt)] -> cs P.== adaSymbol
-        --                               _               -> False ) getCurrOutputs
-        
-        -- adaAmountDeposited :: Maybe Integer
-        -- adaAmountDeposited = case Value.flattenValue . PlutusV2.txOutValue $ (head adaOutPut) of
-        --                        [(cs, tn, amt)] -> case amt P.== 0 of
-        --                                             True  -> Nothing
-        --                                             False -> Just amt
-        --                        _               -> Nothing
-
-        -- validateRatio :: Bool 
-        -- validateRatio = case adaAmountDeposited of
-        --                   Just n -> case extractTokenAmount of
-        --                               Just x  -> PPP.divide n 10 P.>= x
-        --                               Nothing -> False
-        --                   Nothing -> False
 
 
 policy :: Plutus.Address -> PlutusV2.MintingPolicy 

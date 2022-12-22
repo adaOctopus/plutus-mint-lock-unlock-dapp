@@ -23,3 +23,8 @@ Because we love practice, and this is to also help the community to grow we will
 6. Estimated transaction fee: Lovelace 362507 -> Transaction successfully submitted. -> COSTS OF TRANSACTION
 
 #### Next STep -> Minting Utility Token
+
+1. Fixed the minting policy for utility token
+2. It basically checks 2 things
+  a. If the OUTPUT of the lockscript has the correct ratio 1:10 for ada locked
+  b. If the OUTPUT of the user has indeed the 1 NFT about to be minted.
