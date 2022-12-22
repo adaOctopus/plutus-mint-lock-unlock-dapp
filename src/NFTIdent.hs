@@ -46,7 +46,7 @@ import qualified Plutus.V1.Ledger.Scripts             as PLV1
 import qualified Plutus.V2.Ledger.Api                 as PlutusV2
 import qualified Plutus.V2.Ledger.Contexts            as PlutusV2
 import           PlutusTx                             (getPir)
-import           Data.Aeson                  (decode, encode, FromJSON, ToJSON)
+import           Data.Aeson                  (decode, encode, FromJSON, ToJSON, Value (Bool))
 import qualified PlutusTx
 import qualified PlutusTx.Builtins
 import           PlutusTx.Prelude                     as P hiding (Semigroup (..),unless, (.))
@@ -64,7 +64,7 @@ import qualified Utils                       as UTL
 
 nftPolicy :: PlutusV2.TxOutRef -> Plutus.Address -> () -> PlutusV2.ScriptContext -> Bool
 nftPolicy txo lca _ ctx = traceIfFalse "Not enough ADA Locked" depositsEnoughAda &&
-                      traceIfFalse "Wrong amount minted" checkNFTAmount
+                      traceIfFalse "Wrong amount minted" checkNFT
   where
     info :: PlutusV2.TxInfo
     info = PlutusV2.scriptContextTxInfo ctx
@@ -91,10 +91,25 @@ nftPolicy txo lca _ ctx = traceIfFalse "Not enough ADA Locked" depositsEnoughAda
                                               False -> False
                           _               -> False
     
-    checkNFTAmount :: Bool
-    checkNFTAmount = case Value.flattenValue (PlutusV2.txInfoMint info) of
-       [(cs, _, amt)] -> cs  == PlutusV2.ownCurrencySymbol ctx && amt == 1
-       _                -> False
+    -- Value.flattenValue (PlutusV2.txInfoMint info)
+    -- returns [(Currency, TokenName, Integer)]
+    getOnlyTwoCryptoFields :: [(CurrencySymbol, TokenName, Integer)] -> [(CurrencySymbol, Integer)]
+    getOnlyTwoCryptoFields [(cs, _, ing)] = [(cs, ing)]
+    
+    -- Now we filtered for the current NFT symbol so we can check its value
+    filterForCurrentCurrencySymbol :: [(CurrencySymbol, Integer)]
+    filterForCurrentCurrencySymbol = filter ((== PlutusV2.ownCurrencySymbol ctx).fst ) (getOnlyTwoCryptoFields . Value.flattenValue $ PlutusV2.txInfoMint info)
+    
+    checkNFT :: Bool
+    checkNFT = case filterForCurrentCurrencySymbol of
+                 [(cs, ing)] -> ing == 1
+                 _           -> False
+    -- checkNFTAmount :: Bool
+    -- checkNFTAmount = case Value.flattenValue (PlutusV2.txInfoMint info) of
+    --    [(cs, _, amt)] -> case cs  == PlutusV2.ownCurrencySymbol ctx of 
+    --                        True -> amt == 1
+    --                        _    -> True
+    --    _                -> False
 
 
 {-

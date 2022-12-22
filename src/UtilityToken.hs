@@ -64,7 +64,7 @@ import qualified Plutus.V1.Ledger.Address    as PAD
 ------------------------------------------------------------
 {-# INLINEABLE tokenPolicy #-}
 tokenPolicy ::  Plutus.Address -> () -> PlutusV2.ScriptContext -> Bool
-tokenPolicy lca _ ctx = traceIfFalse "Not unique NFT owned" hasUniqueNFT &&
+tokenPolicy lca _ ctx = traceIfFalse "Not unique NFT owned" checkNFT &&
                       traceIfFalse "Not enough ADA deposited to mint the tokens" checkRatioAdaWithToken
   where
 
@@ -95,10 +95,31 @@ tokenPolicy lca _ ctx = traceIfFalse "Not unique NFT owned" hasUniqueNFT &&
     filterOwnerOutput :: [PlutusV2.TxOut]
     filterOwnerOutput =  filter (\outp -> PlutusV2.txOutAddress outp == getUserAddress ) getCurrOutputs
 
-    hasUniqueNFT :: Bool
-    hasUniqueNFT = case Value.flattenValue . PlutusV2.txOutValue $ head filterOwnerOutput of
-                             [(cs, tn, amt)] -> amt P.== 1     
-                             _               -> False
+    -- hasUniqueNFT :: Bool
+    -- hasUniqueNFT = case Value.flattenValue . PlutusV2.txOutValue $ filterOwnerOutput!!1 of
+    --                          [(cs, tn, amt)] -> amt P.== 1     
+    --                          _               -> False
+
+        -- Value.flattenValue (PlutusV2.txInfoMint info)
+    -- returns [(Currency, TokenName, Integer)]
+    getOnlyTwoCryptoFields :: [(CurrencySymbol, TokenName, Integer)] -> [(CurrencySymbol, Integer)]
+    getOnlyTwoCryptoFields [(cs, _, ing)] = [(cs, ing)]
+    
+    -- Now we filtered for the current NFT symbol so we can check its value
+    filterForOtherCurrencySymbol :: [(CurrencySymbol, Integer)]
+    filterForOtherCurrencySymbol = filter ((/= PlutusV2.ownCurrencySymbol ctx).fst ) (getOnlyTwoCryptoFields . Value.flattenValue $ PlutusV2.txInfoMint info)
+    
+
+    filterForCurrentCurrencySymbol :: [(CurrencySymbol, Integer)]
+    filterForCurrentCurrencySymbol = filter ((== PlutusV2.ownCurrencySymbol ctx).fst ) (getOnlyTwoCryptoFields . Value.flattenValue $ PlutusV2.txInfoMint info)
+    
+    getTokenNumber :: [(CurrencySymbol, Integer)] -> Integer
+    getTokenNumber [(cs, ing)] = ing
+
+    checkNFT :: Bool
+    checkNFT = case filterForOtherCurrencySymbol of
+                 [(cs, ing)] -> ing == 1
+                 _           -> False
 
     
     checkRatioAdaWithToken :: Bool
@@ -108,18 +129,16 @@ tokenPolicy lca _ ctx = traceIfFalse "Not unique NFT owned" hasUniqueNFT &&
         mintedToken :: Value.Value
         mintedToken = PlutusV2.txInfoMint info
 
-        extractTokenAmount :: Maybe Integer
-        extractTokenAmount = case Value.flattenValue mintedToken of
-                               [(cs, tn, amt)] -> case amt P.== 0 of
-                                                    True ->  Nothing
-                                                    False -> Just amt
-                               _               -> Nothing
+        -- extractTokenAmount :: Maybe Integer
+        -- extractTokenAmount = case Value.flattenValue mintedToken of
+        --                        [(cs, tn, amt)] -> case amt P.== 0 of
+        --                                             True ->  Nothing
+        --                                             False -> Just amt
+        --                        _               -> Nothing
 
         depositsEnoughAda :: Bool
         depositsEnoughAda = case Value.flattenValue . PlutusV2.txOutValue $ head filterLockScriptAddress of
-                             [(cs, tn, amt)] -> case extractTokenAmount of
-                                                  Just x -> PPP.divide amt 10 P.>= x
-                                                  Nothing -> False       
+                             [(cs, tn, amt)] -> if PPP.divide amt 10 P.>= getTokenNumber filterForCurrentCurrencySymbol then True else False     
                              _               -> False
 
 
