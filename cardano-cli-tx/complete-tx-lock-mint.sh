@@ -2,13 +2,13 @@ cardano-cli transaction build \
     --babbage-era \
     --cardano-mode \
 	--testnet-magic 1 \
-    --tx-in be3d146db46aafd52d976be5065a1a0d5ee3d37346a2ace8d34beac3aed4b26d#0 \
+    --tx-in 5e5b32e2d1f4978bee820eb83ef56c57b2b3aea365eb1153e9a2b8f0c36abc0d#0 \
     --tx-in-collateral f5ea80b105bda1167d45e767cfba304b0c7e39b9982e3bca19ecd6d9d6bf25ce#0 \
     --change-address $(cat ~/Cardano/plutus-vasil/plutus-mint-lock-unlock-dapp/test-addresses/01.addr) \
-    --tx-out $(cat ~/Cardano/plutus-vasil/plutus-mint-lock-unlock-dapp/lock-v2.addr)+100000000 \
+    --tx-out $(cat ~/Cardano/plutus-vasil/plutus-mint-lock-unlock-dapp/lock-v2.addr)+16000000 \
     --tx-out-datum-embed-file ~/Cardano/plutus-vasil/plutus-mint-lock-unlock-dapp/jsons/datum-lock.json \
-    --tx-out $(cat ~/Cardano/plutus-vasil/plutus-mint-lock-unlock-dapp/test-addresses/01.addr)+15000000+"666666 3e673f817a6c6b8b63a3cbbd47cca9ddc35cca5ee66d63a0ec463ed4.57697a617264546f6b656e + 1 49ede37d91ab5d7ed35b976b248cbbf00f8eec469210b911c241c7f1.4c6f636b4e4654" \
-    --mint "666666 3e673f817a6c6b8b63a3cbbd47cca9ddc35cca5ee66d63a0ec463ed4.57697a617264546f6b656e + 1 49ede37d91ab5d7ed35b976b248cbbf00f8eec469210b911c241c7f1.4c6f636b4e4654" \
+    --tx-out $(cat ~/Cardano/plutus-vasil/plutus-mint-lock-unlock-dapp/test-addresses/01.addr)+5000000+"666666 be45231b73e5afb3969ec6239df226876cbb8edf835ce9849e497bec.57697a617264546f6b656e + 1 1173ffec96cec477d8770ea0e0f7032ffd19b056dcf6e935e2c76edf.4c6f636b4e4654" \
+    --mint "666666 be45231b73e5afb3969ec6239df226876cbb8edf835ce9849e497bec.57697a617264546f6b656e + 1 1173ffec96cec477d8770ea0e0f7032ffd19b056dcf6e935e2c76edf.4c6f636b4e4654" \
     --mint-script-file ~/Cardano/plutus-vasil/plutus-mint-lock-unlock-dapp/scripts/utility-token.plutus \
     --mint-redeemer-file ~/Cardano/plutus-vasil/plutus-mint-lock-unlock-dapp/jsons/unit.json \
     --mint-script-file ~/Cardano/plutus-vasil/plutus-mint-lock-unlock-dapp/scripts/nft-mint-V2.plutus \

@@ -93,12 +93,15 @@ nftPolicy txo lca _ ctx = traceIfFalse "Not enough ADA Locked" depositsEnoughAda
     
     -- Value.flattenValue (PlutusV2.txInfoMint info)
     -- returns [(Currency, TokenName, Integer)]
-    getOnlyTwoCryptoFields :: [(CurrencySymbol, TokenName, Integer)] -> [(CurrencySymbol, Integer)]
-    getOnlyTwoCryptoFields [(cs, _, ing)] = [(cs, ing)]
+    -- getOnlyTwoCryptoFields :: [(CurrencySymbol, TokenName, Integer)] -> [(CurrencySymbol, Integer)]
+    -- getOnlyTwoCryptoFields [(cs, _, ing)] = [(cs, ing)]
+
+    getOnlyTwoCryptoFields' :: [(CurrencySymbol, TokenName, Integer)] -> [(CurrencySymbol, Integer)]
+    getOnlyTwoCryptoFields' = fmap $ (\(cs,_,ing) -> (cs, ing)) 
     
     -- Now we filtered for the current NFT symbol so we can check its value
     filterForCurrentCurrencySymbol :: [(CurrencySymbol, Integer)]
-    filterForCurrentCurrencySymbol = filter ((== PlutusV2.ownCurrencySymbol ctx).fst ) (getOnlyTwoCryptoFields . Value.flattenValue $ PlutusV2.txInfoMint info)
+    filterForCurrentCurrencySymbol = filter ((== PlutusV2.ownCurrencySymbol ctx).fst ) (getOnlyTwoCryptoFields' . Value.flattenValue $ PlutusV2.txInfoMint info)
     
     checkNFT :: Bool
     checkNFT = case filterForCurrentCurrencySymbol of
