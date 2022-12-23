@@ -39,3 +39,9 @@ import UtilityToken and Utils inside repl
 Value (Map [(61386666,Map [("ABC",7)])])
 
 -> This is for you to test different kind of Value structures and how to access them.
+
+
+### Problem
+
+THe full tx that mints both tokens fails.
+But if we run two separate txs for each token minting works fine.

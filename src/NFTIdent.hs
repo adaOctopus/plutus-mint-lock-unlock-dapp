@@ -148,4 +148,4 @@ serialisedScript :: PlutusV2.TxOutRef -> Plutus.Address -> PlutusScript PlutusSc
 serialisedScript txo adr = PlutusScriptSerialised $ (scriptSBS txo adr)
 
 writeSerialisedScript :: PlutusV2.TxOutRef -> Plutus.Address -> IO ()
-writeSerialisedScript txo adr = void $ writeFileTextEnvelope "nft-mint-V2.plutus" Nothing (serialisedScript txo adr)
+writeSerialisedScript txo adr = void $ writeFileTextEnvelope "scripts/nft-mint-V2.plutus" Nothing (serialisedScript txo adr)
