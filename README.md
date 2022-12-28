@@ -2,13 +2,20 @@
 This repository has 3 Plutus Smart contracts to implement the design explained in the ReadME file. 
 
 ### Status <br/>
+BACKEND </br>
 -> LockScript Completed  <br/> 
 -> Utility Token Policy -> Completed <br/>
 -> NFT Identification Policy -> Pending <br/>
 -> Offchain TX Construction with Cardano CLI -> (1) Lock Funds COmpleted, (2) Unlock FUnds pending <br/>
 -> Offchain TX Construction with Cardano CLI -> (3) Minting nft while locking COMPLETED, (4) Mint utility token COMPLETED <br/>
 -> All `cardano-cli` txs completed under one tx. Locking funds works, minting identity NFT works, minting Utility token works, unlocking funds from script works
+-> Contract Monad pending for testing
+-> Property based testing pending. AFter finishing the UI
+
+FRONTEND </br>
 -> UI with NextJS using Mesh Library to do offchain from browser -> Pending <br/>
+-> CHeck this repo for offchain & frontend : https://github.com/tas2017/plutus-dapp-lucid
+
 
 ############################################################################
 
