@@ -20,7 +20,7 @@ Because we love practice, and this is to also help the community to grow we will
 3. Run the following `NFTIdent.writeSerialisedScript  (Utils.unsafeReadTxOutRef $ "5e5b32e2d1f4978bee820eb83ef56c57b2b3aea365eb1153e9a2b8f0c36abc0d#0") (Utils.unsafeReadAddress $ "addr_test1wrgzpjxkl3249pfsjgmv7mueautkt28kgx2xhehjqhxanecznac34")`
 
 // THis is using NAMI wallet (browser case)
-`NFTIdent.writeSerialisedScript  (Utils.unsafeReadTxOutRef $ "969798dbfe9af3662d2fb016425792e207f8f440c6926ac58f26b573526968d2#1") (Utils.unsafeReadAddress $ "addr_test1qpyfg6h3hw8ffqpf36xd73700mkhzk2k7k4aam5jeg9zdmj6k4p34kjxrlgugcktj6hzp3r8es2nv3lv3quyk5nmhtqqexpysh")`
+`NFTIdent.writeSerialisedScript  (Utils.unsafeReadTxOutRef $ "969798dbfe9af3662d2fb016425792e207f8f440c6926ac58f26b573526968d2#1") (Utils.unsafeReadAddress $ "addr_test1wrgzpjxkl3249pfsjgmv7mueautkt28kgx2xhehjqhxanecznac34")`
 4. Before running replace "710cad3dbfae3cc0bbabf7ea5f8f34d9f6cb90f423823e4bc41b674a03751caf#1" with a UTXO from your own address, this will be the unique txout ref to be consumed for the NFT to be minted.
 5. Inside the `env.sh` file, the clinft is the policy id and the tokenHex of "LockNFT" token name. You can use that if you dont want to rewrite your own.
 6. Estimated transaction fee: Lovelace 362507 -> Transaction successfully submitted. -> COSTS OF TRANSACTION

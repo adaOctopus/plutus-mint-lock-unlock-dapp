@@ -24,7 +24,7 @@ import Data.List
 import Data.Char (ord)
 -- (toBBString, toBString, OwnerInfo, MyRedeemer, writeJSON)
 import qualified Utils as UTL
-import qualified LockScript as LCS
+import qualified LockScriptV2 as LCS
 
 
 main :: IO ()

@@ -64,7 +64,8 @@ import qualified Utils                       as UTL
 
 nftPolicy :: PlutusV2.TxOutRef -> Plutus.Address -> () -> PlutusV2.ScriptContext -> Bool
 nftPolicy txo lca _ ctx = traceIfFalse "Not enough ADA Locked" depositsEnoughAda &&
-                      traceIfFalse "Wrong amount minted" checkNFT
+                      traceIfFalse "Wrong amount minted" checkNFT &&
+                      traceIfFalse "UTXO not there" hasTheUtxo
   where
     info :: PlutusV2.TxInfo
     info = PlutusV2.scriptContextTxInfo ctx
