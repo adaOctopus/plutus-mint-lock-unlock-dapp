@@ -50,18 +50,7 @@ import           Data.Aeson                  (decode, encode, FromJSON, ToJSON)
 import qualified PlutusTx
 import qualified PlutusTx.Builtins
 import           PlutusTx.Prelude                     as P hiding (Semigroup (..),unless, (.))
-import           Prelude                              (IO, (.), FilePath, Show, String, fromIntegral, show)
-import           Prettyprinter.Extras                 (pretty)
-import qualified Ledger                      as Plutus
-import           Cardano.Ledger.Credential   as Ledger
-import           Cardano.Ledger.Crypto       (StandardCrypto)
-import           Cardano.Ledger.Keys         (KeyHash (..))
-import           Cardano.Crypto.Hash.Class   (hashToBytes)
-import           Cardano.Ledger.Hashes       (ScriptHash (..))
-import           Plutus.V1.Ledger.Credential as PlutusCr
 import           Plutus.V1.Ledger.Crypto     as Plutus
-import qualified Cardano.Ledger.BaseTypes    as LBST (TxIx (..), CertIx (..))
-import qualified Utils as UTL
 
 
 -- What does it do?
@@ -151,3 +140,30 @@ serialisedScript = PlutusScriptSerialised $ scriptSBS
 
 writeSerialisedScript :: IO ()
 writeSerialisedScript = void $ writeFileTextEnvelope "locking-v2.plutus" Nothing serialisedScript
+
+
+-- OFFCHAIN PART STARTS
+
+data LockParams = LockParams {
+    userAddr :: PubKeyHash,
+    adaMount :: !Integer
+} deriving (Generic, ToJSON, FromJSON, ToSchema)
+
+newtype UnlockParams = UnlockParams {
+    infoUser :: UserAction
+}  deriving (Generic, ToJSON, FromJSON, ToSchema)
+
+
+lockit :: AsContractError e => LockParams -> Contract w s e ()
+lockit lp = do
+    let dat = LockDatum
+                { depositAmount = adaAmount lp
+                , ownerKeyHash    = userAddr lp
+                }
+        tx  = Constraints.mustPayToTheScript dat $ Ada.lovelaceValueOf $ adaAmount lp
+    ledgerTx <- submitTxConstraints typedValidator tx
+    void $ awaitTxConfirmed $ getCardanoTxId ledgerTx
+    logInfo @String $ printf "made a gift of %d lovelace to %s with deadline %s"
+        (gpAmount gp)
+        (show $ gpBeneficiary gp)
+        (show $ gpDeadline gp)
