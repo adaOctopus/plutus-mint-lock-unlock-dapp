@@ -197,34 +197,22 @@ type LockingSchema = Endpoint "lock" LockParams
 --       wrap = PSUV.V2.mkUntypedValidator lockScript
 
 
-contractLock :: Contract () LockingSchema Text ()
-contractLock = do
+contractLock :: LockParams -> Contract () LockingSchema Text ()
+contractLock lp = do
     now <- currentTime
     Contract.logInfo @String $ "now: " ++ show now
     Contract.logInfo @String $ "1: pay to the script address"
-    let tx1 = Constraints.mustPayToOtherScript valHash unitDatum $ Ada.lovelaceValueOf 25000000
+    let dat = LockDatum
+                { depositAmount = adaMount lp
+                , ownerKeyHash    = userAddr lp
+                }
+    let tx1 = Constraints.mustPayToOtherScript valHash unitDatum $ Ada.lovelaceValueOf (adaMount lp)
     ledgerTx1 <- submitTx tx1
     void $ awaitTxConfirmed $ getCardanoTxId ledgerTx1
     logInfo @String $ printf "locked funds of %d lovelace to %s"
 
 
-
--- lockit :: AsContractError e => LockParams -> Contract w s e ()
--- lockit lp = do
---     let dat = LockDatum
---                 { depositAmount = adaMount lp
---                 , ownerKeyHash    = userAddr lp
---                 }
---         tx  = Constraints.mustPayToTheScript dat $ Ada.lovelaceValueOf $ adaMount lp
---     ledgerTx <- submitTxConstraints typedValidator tx
---     void $ awaitTxConfirmed $ getCardanoTxId ledgerTx
---     logInfo @String $ printf "made a gift of %d lovelace to %s with deadline %s"
---         (adaMount lp)
---         (show $ userAddr lp)
---         (show $ adaMount lp)
-
--- endpoints :: Contract () LockingSchema Text ()
--- endpoints = awaitPromise give' >> endpoints
---   where
---     give' = endpoint @"lock" lockit
---     -- grab' = endpoint @"grab" $ const grab
+endpoints :: Contract () LockingSchema Text ()
+endpoints = mint' >> endpoints
+  where
+    mint' = awaitPromise $ endpoint @"lock" contractLock
