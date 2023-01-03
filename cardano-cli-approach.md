@@ -17,7 +17,7 @@ Because we love practice, and this is to also help the community to grow we will
 
 1. Get inside cabal repl
 2. IMport NFTIdent & Utils
-3. Run the following `NFTIdent.writeSerialisedScript  (Utils.unsafeReadTxOutRef $ "5e5b32e2d1f4978bee820eb83ef56c57b2b3aea365eb1153e9a2b8f0c36abc0d#0") (Utils.unsafeReadAddress $ "addr_test1wrgzpjxkl3249pfsjgmv7mueautkt28kgx2xhehjqhxanecznac34")`
+3. Run the following `NFTIdent.writeSerialisedScript  (Utils.unsafeReadTxOutRef $ "1203ac5c18f1dc498da0cc2330505480eaf7dfe0b6febdc8a60926933b082d66#2") (Utils.unsafeReadAddress $ "addr_test1wrgzpjxkl3249pfsjgmv7mueautkt28kgx2xhehjqhxanecznac34")`
 
 // THis is using NAMI wallet (browser case)
 `NFTIdent.writeSerialisedScript  (Utils.unsafeReadTxOutRef $ "969798dbfe9af3662d2fb016425792e207f8f440c6926ac58f26b573526968d2#1") (Utils.unsafeReadAddress $ "addr_test1wrgzpjxkl3249pfsjgmv7mueautkt28kgx2xhehjqhxanecznac34")`
@@ -44,7 +44,7 @@ Value (Map [(61386666,Map [("ABC",7)])])
 -> This is for you to test different kind of Value structures and how to access them.
 
 
-### Problem
+### Cardano CLI transaction completed
 
-THe full tx that mints both tokens fails.
-But if we run two separate txs for each token minting works fine.
+THe full tx that mints both tokens and locks funds work fine from cardano-cli.
+However, doing it from the browser is not done yet.

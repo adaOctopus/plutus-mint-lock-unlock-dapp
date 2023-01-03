@@ -13,6 +13,7 @@ library
   exposed-modules:     
                        LockScriptV2,
                        UtilityToken,
+                       Offchain.LockScriptWOF,
                        Utils,
                        NFTIdent,
                        NewUtil
