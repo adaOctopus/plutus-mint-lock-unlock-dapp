@@ -5,13 +5,14 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NoImplicitPrelude     #-}
 {-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE RankNTypes            #-}
-{-# LANGUAGE RecordWildCards       #-}
+-- {-# LANGUAGE RankNTypes            #-}
+-- {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TemplateHaskell       #-}
 {-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE TypeOperators         #-}
+{-# OPTIONS_GHC -Wall #-}
 
 module Offchain.LockScriptWOF where
 
@@ -30,7 +31,7 @@ import           GHC.Generics           ( Generic )
 import qualified Data.ByteString.Short                as SBS
 import qualified Data.ByteString.Base16 as B16
 import           Data.Functor                         (void)
-import           Data.Text                   (pack, unpack)
+import           Data.Text                   (pack, unpack, Text)
 import           Data.String                                    (fromString)
 import qualified Data.Maybe                           as DM (fromJust, fromMaybe)
 import qualified Ledger.Typed.Scripts                 as Scripts
@@ -49,10 +50,17 @@ import           PlutusTx                             (getPir)
 import           Data.Aeson                  (decode, encode, FromJSON, ToJSON)
 import qualified PlutusTx
 import qualified PlutusTx.Builtins
-import           PlutusTx.Prelude                     as P hiding (Semigroup (..),unless, (.))
+import           PlutusTx.Prelude                     as P hiding (Semigroup (..),unless)
 import           Plutus.V1.Ledger.Crypto     as Plutus
-
-
+import           Ledger.Constraints   (TxConstraints)
+import qualified Ledger.Constraints   as Constraints
+import Plutus.Contract as Contract 
+import Ledger 
+import           Prelude              (IO, Semigroup (..), Show (..), String)
+import qualified Prelude
+import           Ledger.Ada           as Ada
+import           Schema               (ToSchema)
+import           Text.Printf            (printf)
 -- What does it do?
 -- Stores info regarding how much ALice deposited
 -- 2 Actions, Lock & UNlock the funds
@@ -120,6 +128,10 @@ typedValidator = PLV1.mkValidatorScript $$(PlutusTx.compile [|| wrap ||])
    where
       wrap = PSUV.V2.mkUntypedValidator lockScript
 
+
+-- untypedValidatorV2 :: PSU.V2.Validator -- There is not yet a way to make a V2 typed validator (PLT-494)
+-- untypedValidatorV2 = PlutusV2.mkValidatorScript $$(PlutusTx.compile [|| PSU.V2.mkUntypedValidator lockScript ||])
+
 lockingScript :: PlutusV2.Script
 lockingScript = PlutusV2.unValidatorScript typedValidator
 
@@ -149,21 +161,43 @@ data LockParams = LockParams {
     adaMount :: !Integer
 } deriving (Generic, ToJSON, FromJSON, ToSchema)
 
-newtype UnlockParams = UnlockParams {
-    infoUser :: UserAction
-}  deriving (Generic, ToJSON, FromJSON, ToSchema)
+-- newtype UnlockParams = UnlockParams {
+--     infoUser :: UserAction
+-- }  deriving (Generic, ToJSON, FromJSON, ToSchema)
 
 
-lockit :: AsContractError e => LockParams -> Contract w s e ()
-lockit lp = do
-    let dat = LockDatum
-                { depositAmount = adaAmount lp
-                , ownerKeyHash    = userAddr lp
-                }
-        tx  = Constraints.mustPayToTheScript dat $ Ada.lovelaceValueOf $ adaAmount lp
-    ledgerTx <- submitTxConstraints typedValidator tx
-    void $ awaitTxConfirmed $ getCardanoTxId ledgerTx
+
+type LockingSchema = Endpoint "lock" LockParams
+
+
+contractLock :: Contract () LockingSchema Text ()
+contractLock = do
+    now <- currentTime
+    Contract.logInfo @String $ "now: " ++ show now
+    Contract.logInfo @String $ "1: pay to the script address"
+    let tx1 = Constraints.mustPayToTheScript Value valHash unitDatum $ Ada.lovelaceValueOf 25000000
+    ledgerTx1 <- submitTx tx1
+    void $ awaitTxConfirmed $ getCardanoTxId ledgerTx1
     logInfo @String $ printf "made a gift of %d lovelace to %s with deadline %s"
-        (gpAmount gp)
-        (show $ gpBeneficiary gp)
-        (show $ gpDeadline gp)
+
+
+
+-- lockit :: AsContractError e => LockParams -> Contract w s e ()
+-- lockit lp = do
+--     let dat = LockDatum
+--                 { depositAmount = adaMount lp
+--                 , ownerKeyHash    = userAddr lp
+--                 }
+--         tx  = Constraints.mustPayToTheScript dat $ Ada.lovelaceValueOf $ adaMount lp
+--     ledgerTx <- submitTxConstraints typedValidator tx
+--     void $ awaitTxConfirmed $ getCardanoTxId ledgerTx
+--     logInfo @String $ printf "made a gift of %d lovelace to %s with deadline %s"
+--         (adaMount lp)
+--         (show $ userAddr lp)
+--         (show $ adaMount lp)
+
+-- endpoints :: Contract () LockingSchema Text ()
+-- endpoints = awaitPromise give' >> endpoints
+--   where
+--     give' = endpoint @"lock" lockit
+--     -- grab' = endpoint @"grab" $ const grab
