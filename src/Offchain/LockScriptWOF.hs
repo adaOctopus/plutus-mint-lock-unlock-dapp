@@ -34,7 +34,6 @@ import           Data.Functor                         (void)
 import           Data.Text                   (pack, unpack, Text)
 import           Data.String                                    (fromString)
 import qualified Data.Maybe                           as DM (fromJust, fromMaybe)
-import qualified Ledger.Typed.Scripts                 as Scripts
 import           Ledger.Value                         as Value
 import qualified         Data.Aeson                  (decode, encode)
 import qualified Ledger.Address                       as LAD
@@ -44,8 +43,10 @@ import qualified Plutus.Script.Utils.V2.Typed.Scripts.Validators as PSUV.V2
 import qualified Plutus.V1.Ledger.Api                 as PlutusV1
 import qualified Plutus.V1.Ledger.Contexts            as PlutusV1
 import qualified Plutus.V1.Ledger.Scripts             as PLV1
+import qualified Ledger.Typed.Scripts                 as ScriptsOne
 import qualified Plutus.V2.Ledger.Api                 as PlutusV2
 import qualified Plutus.V2.Ledger.Contexts            as PlutusV2
+import qualified Ledger.Typed.Scripts as Scripts
 import           PlutusTx                             (getPir)
 import           Data.Aeson                  (decode, encode, FromJSON, ToJSON)
 import qualified PlutusTx
@@ -61,6 +62,9 @@ import qualified Prelude
 import           Ledger.Ada           as Ada
 import           Schema               (ToSchema)
 import           Text.Printf            (printf)
+import qualified Ledger as Scripts
+import qualified Ledger as PSU.V2
+import qualified Ledger.Typed.Scripts as PLV1
 -- What does it do?
 -- Stores info regarding how much ALice deposited
 -- 2 Actions, Lock & UNlock the funds
@@ -91,7 +95,7 @@ PlutusTx.makeIsDataIndexed ''UserAction
  ]
 
 {-# INLINEABLE lockScript #-}
-lockScript :: LockDatum -> UserAction -> PlutusV2.ScriptContext -> Bool
+lockScript :: LockDatum -> UserAction -> PlutusV1.ScriptContext -> Bool
 lockScript dt rd ctx = traceIfFalse "Oops wrong password" checkPass &&
                        traceIfFalse "Oops not correct signature" checkSign
     
@@ -123,17 +127,34 @@ lockScript dt rd ctx = traceIfFalse "Oops wrong password" checkPass &&
                                                 False -> False
                             _               -> False
 
-typedValidator :: PlutusV2.Validator 
-typedValidator = PLV1.mkValidatorScript $$(PlutusTx.compile [|| wrap ||])
-   where
-      wrap = PSUV.V2.mkUntypedValidator lockScript
-
 
 -- untypedValidatorV2 :: PSU.V2.Validator -- There is not yet a way to make a V2 typed validator (PLT-494)
--- untypedValidatorV2 = PlutusV2.mkValidatorScript $$(PlutusTx.compile [|| PSU.V2.mkUntypedValidator lockScript ||])
+-- untypedValidatorV2 = PlutusV2.mkValidatorScript $$(PlutusTx.compile [|| wrap ||])
+--   where
+--     wrap = PSU.V2.mkUntypedValidator lockScript
 
-lockingScript :: PlutusV2.Script
-lockingScript = PlutusV2.unValidatorScript typedValidator
+data Typed
+instance Scripts.ValidatorTypes Typed where
+  type DatumType Typed = LockDatum
+  type RedeemerType Typed = UserAction
+
+typedValidatorX :: ScriptsOne.TypedValidator Typed
+typedValidatorX =
+    Scripts.mkTypedValidator @Typed
+    $$(PlutusTx.compile [||lockScript||])
+    $$(PlutusTx.compile [||wrap||])
+    where
+        wrap = PSU.V1.mkUntypedValidator
+
+
+validatorV1 :: PlutusV1.Validator
+validatorV1 = PLV1.validatorScript typedValidatorX
+
+valHash :: PSU.V2.ValidatorHash
+valHash = ScriptsOne.validatorHash typedValidatorX
+
+lockingScript :: PlutusV1.Script
+lockingScript = PlutusV1.unValidatorScript validatorV1
 
 
 {-
@@ -166,8 +187,14 @@ data LockParams = LockParams {
 -- }  deriving (Generic, ToJSON, FromJSON, ToSchema)
 
 
-
 type LockingSchema = Endpoint "lock" LockParams
+
+
+-- V2 DOES NOT WORK FOR TYPED VALIDATORS
+-- typedValidator :: PSU.V2.Validator 
+-- typedValidator = PLV1.mkValidatorScript $$(PlutusTx.compile [|| wrap ||])
+--    where
+--       wrap = PSUV.V2.mkUntypedValidator lockScript
 
 
 contractLock :: Contract () LockingSchema Text ()
@@ -175,10 +202,10 @@ contractLock = do
     now <- currentTime
     Contract.logInfo @String $ "now: " ++ show now
     Contract.logInfo @String $ "1: pay to the script address"
-    let tx1 = Constraints.mustPayToTheScript Value valHash unitDatum $ Ada.lovelaceValueOf 25000000
+    let tx1 = Constraints.mustPayToOtherScript valHash unitDatum $ Ada.lovelaceValueOf 25000000
     ledgerTx1 <- submitTx tx1
     void $ awaitTxConfirmed $ getCardanoTxId ledgerTx1
-    logInfo @String $ printf "made a gift of %d lovelace to %s with deadline %s"
+    logInfo @String $ printf "locked funds of %d lovelace to %s"
 
 
 
