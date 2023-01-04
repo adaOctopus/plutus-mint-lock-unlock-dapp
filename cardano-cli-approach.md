@@ -8,6 +8,13 @@ We first build a transaction that
 -> THen construct another transaction that mints the utility tokens based on the users inputs before to the oock script
 
 
+### Note
+
+In order to run this in your own environment, you have to update everytime the NFTIdent serialization, with your own TxRef from your own wallet so it can work.
+For the script address though, you can use the one shown below:
+addr_test1wrgzpjxkl3249pfsjgmv7mueautkt28kgx2xhehjqhxanecznac34
+
+
 #### Plutus V2 approach
 
 Because we love practice, and this is to also help the community to grow we will demonstrate a V2 approach by creating reference scripts for the contracts we built.

@@ -17,6 +17,8 @@ FRONTEND </br>
 -> CHeck this repo for offchain & frontend : https://github.com/tas2017/plutus-dapp-lucid
 
 
+### FOR HELP JOIN OUR PLUTUS WIZARDS SERVER ON DISCORD: https://discord.gg/hvGtC7Xh
+
 ############################################################################
 
 ## *Trust No Bank*

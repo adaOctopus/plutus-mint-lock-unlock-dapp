@@ -209,7 +209,7 @@ contractLock lp = do
     let tx1 = Constraints.mustPayToOtherScript valHash unitDatum $ Ada.lovelaceValueOf (adaMount lp)
     ledgerTx1 <- submitTx tx1
     void $ awaitTxConfirmed $ getCardanoTxId ledgerTx1
-    logInfo @String $ printf "locked funds of %d lovelace to %s"
+    logInfo @String $ "tx1 successfully submitted"
 
 
 endpoints :: Contract () LockingSchema Text ()
