@@ -101,11 +101,11 @@ lockScript dt rd ctx = traceIfFalse "Oops wrong password" checkPass &&
     
     where
 
-      info :: PlutusV2.TxInfo
-      info =  PlutusV2.scriptContextTxInfo ctx
+      info :: PlutusV1.TxInfo
+      info =  PlutusV1.scriptContextTxInfo ctx
 
       checkSign :: Bool
-      checkSign = PlutusV2.txSignedBy info $ ownerKeyHash dt
+      checkSign = PlutusV1.txSignedBy info $ ownerKeyHash dt
 
       checkPass :: Bool
       checkPass = case rd of 
@@ -117,11 +117,11 @@ lockScript dt rd ctx = traceIfFalse "Oops wrong password" checkPass &&
                    Unlock amt _ -> amt == depositAmount dt
                    _            -> False
       
-      getTxInputs :: [PlutusV2.TxInInfo]
-      getTxInputs = PlutusV2.txInfoInputs info
+      getTxInputs :: [PlutusV1.TxInInfo]
+      getTxInputs = PlutusV1.txInfoInputs info
       
       depositsEnoughAda :: Bool
-      depositsEnoughAda = case Value.flattenValue . PlutusV2.txOutValue . PlutusV2.txInInfoResolved $ head getTxInputs of
+      depositsEnoughAda = case Value.flattenValue . PlutusV1.txOutValue . PlutusV1.txInInfoResolved $ head getTxInputs of
                             [(cs, tn, amt)] -> case amt P.>= 10000000 of
                                                 True -> True
                                                 False -> False
