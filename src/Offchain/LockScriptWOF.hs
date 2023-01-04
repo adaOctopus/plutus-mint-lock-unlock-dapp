@@ -31,6 +31,8 @@ import           GHC.Generics           ( Generic )
 import qualified Data.ByteString.Short                as SBS
 import qualified Data.ByteString.Base16 as B16
 import           Data.Functor                         (void)
+import           Data.Void                            (Void)
+import           Data.Map                             as Map
 import           Data.Text                   (pack, unpack, Text)
 import           Data.String                                    (fromString)
 import qualified Data.Maybe                           as DM (fromJust, fromMaybe)
@@ -65,6 +67,7 @@ import           Text.Printf            (printf)
 import qualified Ledger as Scripts
 import qualified Ledger as PSU.V2
 import qualified Ledger.Typed.Scripts as PLV1
+import           Playground.TH        (mkKnownCurrencies, mkSchemaDefinitions)
 -- What does it do?
 -- Stores info regarding how much ALice deposited
 -- 2 Actions, Lock & UNlock the funds
@@ -81,6 +84,7 @@ instance Eq LockDatum where
     {-# INLINABLE (==) #-}
     LockDatum d1 p1 == LockDatum d2 p2 = p1 == p2 && d1 == d2
 
+PlutusTx.makeLift ''LockDatum
 PlutusTx.unstableMakeIsData ''LockDatum
 
 type AmountToUnlock = Integer
@@ -153,6 +157,9 @@ validatorV1 = PLV1.validatorScript typedValidatorX
 valHash :: PSU.V2.ValidatorHash
 valHash = ScriptsOne.validatorHash typedValidatorX
 
+scrAddress :: Ledger.Address
+scrAddress = ScriptsOne.validatorAddress typedValidatorX
+
 lockingScript :: PlutusV1.Script
 lockingScript = PlutusV1.unValidatorScript validatorV1
 
@@ -187,7 +194,7 @@ data LockParams = LockParams {
 -- }  deriving (Generic, ToJSON, FromJSON, ToSchema)
 
 
-type LockingSchema = Endpoint "lock" LockParams
+type LockingSchema = Endpoint "lock" LockParams .\/ Endpoint "unlock" LockParams
 
 
 -- V2 DOES NOT WORK FOR TYPED VALIDATORS
@@ -196,6 +203,8 @@ type LockingSchema = Endpoint "lock" LockParams
 --    where
 --       wrap = PSUV.V2.mkUntypedValidator lockScript
 
+testingRedeemer :: UserAction
+testingRedeemer = Unlock 100000000 467
 
 contractLock :: LockParams -> Contract () LockingSchema Text ()
 contractLock lp = do
@@ -206,13 +215,33 @@ contractLock lp = do
                 { depositAmount = adaMount lp
                 , ownerKeyHash    = userAddr lp
                 }
-    let tx1 = Constraints.mustPayToOtherScript valHash unitDatum $ Ada.lovelaceValueOf (adaMount lp)
+        -- mustPayToOtherScript expects datum of type Ledger.Datum, so we need to convert whatever custom datum we have
+        datumFormatter = (Scripts.Datum $ PlutusTx.toBuiltinData dat)
+    let tx1 = Constraints.mustPayToOtherScript valHash datumFormatter $ Ada.lovelaceValueOf (adaMount lp)
     ledgerTx1 <- submitTx tx1
     void $ awaitTxConfirmed $ getCardanoTxId ledgerTx1
     logInfo @String $ "tx1 successfully submitted"
 
+    logInfo @String $ "2: spend from script address including datum and redeemer 'CUSTOM ;)'"
+    utxos <- utxosAt scrAddress
+    let orefs = fst <$> Map.toList utxos
+        lookups =
+            Constraints.plutusV1OtherScript validatorV1
+            <> Constraints.unspentOutputs utxos
+        tx2 =
+            mconcat [Constraints.mustSpendScriptOutput oref (Scripts.Redeemer $ PlutusTx.toBuiltinData testingRedeemer) | oref <- orefs]
+            <> Constraints.mustIncludeDatum datumFormatter -- List comprehension -- Changing redeemer value correctly throws ValidationError
+            -- <> Constraints.mustValidateIn (to $ 1596059100000) -- doesn't seem to care what datum is
+    ledgerTx2 <- submitTxConstraintsWith @Void lookups tx2
+    logInfo @String $ "waiting for tx2 confirmed..."
+    awaitTxConfirmed $ getCardanoTxId ledgerTx2
+    logInfo @String $ "tx2 successfully submitted"
+
 
 endpoints :: Contract () LockingSchema Text ()
-endpoints = mint' >> endpoints
+endpoints = awaitPromise (lock' `select` unlock') >> endpoints
   where
-    mint' = awaitPromise $ endpoint @"lock" contractLock
+    lock' = endpoint @"lock" contractLock
+    unlock' = endpoint @"unlock" contractLock
+
+mkSchemaDefinitions ''LockingSchema

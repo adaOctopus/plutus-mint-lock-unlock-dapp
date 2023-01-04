@@ -25,5 +25,9 @@ myTrace = do
         adaMount = 10000000
         }
     void $ waitUntilSlot 10
+    callEndpoint @"unlock" h2 $ LockParams {
+        userAddr = LAD.unPaymentPubKeyHash . UTL.unsafePaymentPubKeyHash . mockWalletAddress $ knownWallet 1,
+        adaMount = 10000000
+        }
     s <- waitNSlots 2
     Extras.logInfo $ "reached " ++ show s
