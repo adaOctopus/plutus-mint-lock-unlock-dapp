@@ -204,8 +204,9 @@ scenarioSimulation sp lp = do
         []       -> Contract.logError @String "no utxo found"
         oref : _ -> do
             let tn      = npToken sp
-            let val     = Value.singleton (curSymbol oref tn) tn 1
-                lookups = Constraints.mintingPolicy (policy oref tn) <> Constraints.unspentOutputs utxos
+                adr     = npAddress sp
+            let val     = Value.singleton (curSymbol oref adr) tn 1
+                lookups = Constraints.plutusV1MintingPolicy (policy oref adr) <> Constraints.unspentOutputs utxos
                 tx2     = Constraints.mustMintValue val <> Constraints.mustSpendPubKeyOutput oref
             ledgerTx2 <- submitTxConstraintsWith @Void lookups tx2
             void $ awaitTxConfirmed $ Plutus.getCardanoTxId ledgerTx2
