@@ -5,13 +5,14 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NoImplicitPrelude     #-}
 {-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE RankNTypes            #-}
-{-# LANGUAGE RecordWildCards       #-}
+-- {-# LANGUAGE RankNTypes            #-}
+-- {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TemplateHaskell       #-}
 {-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE TypeOperators         #-}
+{-# OPTIONS_GHC -Wall #-}
 
 module Offchain.LockMintWOF where
 
@@ -25,7 +26,7 @@ import           Cardano.Api.Shelley                  (PlutusScript (..), Plutus
 import qualified Codec.Serialise             as Codec
 import           Codec.Serialise
 import qualified Data.ByteString.Lazy                 as LBS
-
+import           Data.Map                             as Map
 import           GHC.Generics           ( Generic )
 import qualified Data.ByteString.Short                as SBS
 import qualified Data.ByteString.Base16 as B16
@@ -36,6 +37,7 @@ import qualified Data.Maybe                           as DM (fromJust, fromMaybe
 import qualified Ledger.Typed.Scripts                 as Scripts
 import           Ledger.Value                         as Value
 import qualified         Data.Aeson                  (decode, encode)
+import           Data.Void                            (Void)
 import qualified Ledger.Address                       as LAD
 import qualified Plutus.Script.Utils.V1.Typed.Scripts as PSU.V1
 import qualified Plutus.Script.Utils.V2.Typed.Scripts as PSU.V2
@@ -50,7 +52,7 @@ import           Data.Aeson                  (decode, encode, FromJSON, ToJSON, 
 import qualified PlutusTx
 import qualified PlutusTx.Builtins
 import           PlutusTx.Prelude                     as P hiding (Semigroup (..),unless, (.))
-import           Prelude                              (IO, (.), FilePath, Show, String, fromIntegral, show, div)
+import           Prelude                              (IO, (.), FilePath, Show, String, fromIntegral, show, div, ( <> ))
 import           Prettyprinter.Extras                 (pretty)
 import qualified PlutusTx.Prelude            as PPP (divide)
 import qualified Ledger                      as Plutus
@@ -58,9 +60,10 @@ import           Cardano.Ledger.Credential   as Ledger
 import qualified Utils                       as UTL
 import qualified Ledger.Typed.Scripts        as ScriptsOne
 import qualified Offchain.LockScriptWOF      as LSWOF
-import           Ledger.Constraints   (TxConstraints)
+import           Ledger.Constraints
 import qualified Ledger.Constraints   as Constraints
 import Plutus.Contract as Contract 
+import           Text.Printf            (printf)
 import           Ledger.Ada           as Ada
 
 --- THIS IS THE POLICY FOR THE NFT IDENTIFICATION TOKEN
@@ -89,7 +92,7 @@ nftPolicy txo lca _ ctx = traceIfFalse "Not enough ADA Locked" depositsEnoughAda
     getCurrOutputs = PlutusV1.txInfoOutputs info
 
     filterLockScriptAddress :: [PlutusV1.TxOut]
-    filterLockScriptAddress = filter (\outp -> PlutusV1.txOutAddress outp == lca ) getTxOutputs
+    filterLockScriptAddress = P.filter (\outp -> PlutusV1.txOutAddress outp == lca ) getTxOutputs
 
     depositsEnoughAda :: Bool
     depositsEnoughAda = case Value.flattenValue . PlutusV1.txOutValue $ head filterLockScriptAddress of
@@ -108,7 +111,7 @@ nftPolicy txo lca _ ctx = traceIfFalse "Not enough ADA Locked" depositsEnoughAda
     
     -- Now we filtered for the current NFT symbol so we can check its value
     filterForCurrentCurrencySymbol :: [(CurrencySymbol, Integer)]
-    filterForCurrentCurrencySymbol = filter ((== PlutusV1.ownCurrencySymbol ctx).fst ) (getOnlyTwoCryptoFields' . Value.flattenValue $ PlutusV1.txInfoMint info)
+    filterForCurrentCurrencySymbol = P.filter ((== PlutusV1.ownCurrencySymbol ctx).fst ) (getOnlyTwoCryptoFields' . Value.flattenValue $ PlutusV1.txInfoMint info)
     
     checkNFT :: Bool
     checkNFT = case filterForCurrentCurrencySymbol of
@@ -185,8 +188,8 @@ scenarioSimulation :: ScenarioParams -> LSWOF.LockParams -> Contract () Scenario
 scenarioSimulation sp lp = do
     Contract.logInfo @String $ "1: pay to the script address"
     let dat = LSWOF.LockDatum
-                { depositAmount = LSWOF.adaMount lp
-                , ownerKeyHash    = LSWOF.userAddr lp
+                { LSWOF.depositAmount = LSWOF.adaMount lp
+                , LSWOF.ownerKeyHash    = LSWOF.userAddr lp
                 }
         -- mustPayToOtherScript expects datum of type Ledger.Datum, so we need to convert whatever custom datum we have
         datumFormatter = (Plutus.Datum $ PlutusTx.toBuiltinData dat)
@@ -204,20 +207,20 @@ scenarioSimulation sp lp = do
             let val     = Value.singleton (curSymbol oref tn) tn 1
                 lookups = Constraints.mintingPolicy (policy oref tn) <> Constraints.unspentOutputs utxos
                 tx2     = Constraints.mustMintValue val <> Constraints.mustSpendPubKeyOutput oref
-    ledgerTx2 <- submitTxConstraintsWith @Void lookups tx2
-    void $ awaitTxConfirmed $ Plutus.getCardanoTxId ledgerTx2
-    Contract.logInfo @String $ printf "forged %s" (show val)
+            ledgerTx2 <- submitTxConstraintsWith @Void lookups tx2
+            void $ awaitTxConfirmed $ Plutus.getCardanoTxId ledgerTx2
+            Contract.logInfo @String $ printf "forged %s" (show val)
     let sParams = (Plutus.Datum $ PlutusTx.toBuiltinData sp)
     logInfo @String $ "tx2 successfully submitted"
 
-    COntract.logInfo @String $ "3: unlock the funds from script address"
+    Contract.logInfo @String $ "3: unlock the funds from script address"
     scriptUtxos <- utxosAt LSWOF.scrAddress
     let scriptOrefs = fst <$> Map.toList scriptUtxos
         lookupScript =
             Constraints.plutusV1OtherScript LSWOF.validatorV1
             <> Constraints.unspentOutputs scriptUtxos
         tx3 =
-            mconcat [Constraints.mustSpendScriptOutput oref (Scripts.Redeemer $ PlutusTx.toBuiltinData testingRedeemerX) | oref <- scriptOrefs]
+            mconcat [Constraints.mustSpendScriptOutput oref (Plutus.Redeemer $ PlutusTx.toBuiltinData testingRedeemerX) | oref <- scriptOrefs]
             <> Constraints.mustIncludeDatum datumFormatter -- List comprehension -- Changing redeemer value correctly throws ValidationError
             -- <> Constraints.mustValidateIn (to $ 1596059100000) -- doesn't seem to care what datum is
     ledgerTx3 <- submitTxConstraintsWith @Void lookupScript tx3
