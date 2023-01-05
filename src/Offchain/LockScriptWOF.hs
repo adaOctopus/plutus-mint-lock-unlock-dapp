@@ -204,7 +204,7 @@ type LockingSchema = Endpoint "lock" LockParams .\/ Endpoint "unlock" LockParams
 --       wrap = PSUV.V2.mkUntypedValidator lockScript
 
 testingRedeemer :: UserAction
-testingRedeemer = Unlock 100000000 467
+testingRedeemer = Unlock 100000000 42
 
 contractLock :: LockParams -> Contract () LockingSchema Text ()
 contractLock lp = do
