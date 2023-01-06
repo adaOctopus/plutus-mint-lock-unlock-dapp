@@ -20,8 +20,8 @@ FRONTEND </br>
 ### FOR HELP JOIN OUR PLUTUS WIZARDS SERVER ON DISCORD: https://discord.gg/hvGtC7Xh
 
 
-#### Please
-Review the HOWTOUSE.md file for how to play with this repo locally.
+#### PLEASE <3
+Review the HowToUse.md file for how to play with this repo locally.
 This current document is an explanation of the concept.
 
 ############################################################################
