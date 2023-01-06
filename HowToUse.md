@@ -28,3 +28,32 @@ run: `git clone https://github.com/input-output-hk/plutus-apps`
 8. NOw run `cabal build` (you are inside a nix shell)
 9. EVerything should be done and compiled properly.
 10. If not search the error or message in the PlutusWizards discord https://discord.gg/hvGtC7Xh
+
+
+### Approach one: `cardano-cli` 
+
+In this approach we are going to use cardano-cli in order to interact with the contracts.
+First, I would recommend to spend some time reading LockScriptV2, NFTIdent, UtilToken just to understand what's going on.
+The contracts are very basic, for the purpose of this practice repo.
+
+Also, in order to use this approach, I assume you have `cardano-node`, `cardano-cli` installed, and you have created in your own directory some test addresses.
+No useful to use my test-addresses, cause if multiple people use this repo it wont work.
+
+Also, WE USE PREPROD. That's the testnet we use for this repo.
+
+Review the: `cardano-cli-tx/complete-tx-lock-mint.sh` to understand whats going on. Remember, you will have to update fields there, like inputs (txIds,refs, policyIDS)
+
+You have to serialize NFTIdent, UtilToken on your own using your own TxOutRefs (for NFTIdent)
+Read the contracts to understand what parameterized means, and why you need TxOutRef to serialize the NFT ident script
+
+FOr the LockScriptV2 you dont need to serialize it, here is its address. `addr_test1wrgzpjxkl3249pfsjgmv7mueautkt28kgx2xhehjqhxanecznac34`
+
+Here is the guidance around serializing the Contracts:
+1. go to `cardano-cli-approach.md` at the root of this directory.
+2. Line 23 and beyond.
+3. If you have questions, discord server is the way to go.
+
+Once you are done with serialization, once you have updated `cardano-cli-tx/complete-tx-lock-mint.sh` this bash script with your inputs, policyids, numbers and files you can go at cardano-cli-tx folder at the root of this directory and run :  `.complete-tx-lock-mint.sh` to run the transaction.
+
+You need to have a cardano node up and running to do this, and remember to export the CARDANO_SOCKET_PATH inside this directory.
+
