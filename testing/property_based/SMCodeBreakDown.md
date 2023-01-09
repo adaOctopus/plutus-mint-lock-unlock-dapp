@@ -70,3 +70,39 @@ instance SM.AsSMContractError GambleError where
     _SMContractError = _GambleSMError . SM._SMContractError
 
 ```
+
+
+6. Lines `167-185` we define the State of the state machine, Started, Locked, EndBet
+
+7. Top level contract instance and the type for the actual token needed for someone to make a bet.
+
+```
+-- | Top-level contract, exposing both endpoints.
+contract :: Contract () GambleStateMachineSchema GambleError ()
+contract = selectList [lockie, bettie] >> contract
+---------------------- ^ lockie & bettie, are the endpoints for this state machine
+
+-- | The token that represents the right to make a bet
+newtype GambleToken = GambleToken { unGambleToken :: Value }
+    deriving newtype (Eq, Haskell.Show)
+
+token :: MintingPolicyHash -> TokenName -> Value
+token mps tn = V.singleton (V.mpsSymbol mps) tn 1
+
+```
+
+8. Possible actions for someone to interact with the contract itself.
+
+```
+
+
+-- | Inputs (actions) BAsically what can someone do when interacting with this StateMachine.
+data GambleInput =
+      MintToken
+    -- ^ Mint the "bet" token
+    | Bet Address ClearString HashedString Value
+    -- ^ Make a bet, extract the funds if you win.
+    deriving stock (Haskell.Show, Generic)
+    deriving anyclass (ToJSON, FromJSON)
+
+```
