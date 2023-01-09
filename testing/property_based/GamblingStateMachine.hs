@@ -69,7 +69,7 @@ import Prelude qualified as Haskell
 
 data GambleParam = GambleParam {
 
-    initiatorAddr :: Address
+    initiatorAddr :: LAD.PaymentPubKeyHash
 
 } deriving (Haskell.Show, Generic, ToJSON, FromJSON)
 
@@ -117,7 +117,7 @@ data MakeBetArgs =
     MakeBetArgs
         {
             makeBetGambleArgs   :: GambleParam,
-            passTokenGambleArgs :: Address,
+            passTokenGambleArgs :: LAD.PaymentPubKeyHash,
             actualBetGambleArgs :: Value
         } deriving stock (Haskell.Show, Generic)
           deriving anyclass (ToJSON, FromJSON)
@@ -196,7 +196,7 @@ checkBetPass (HashedString actual) (ClearString gss) = actual == sha2_256 gss
 data GambleInput =
       MintToken
     -- ^ Mint the "bet" token
-    | Bet Address ClearString HashedString Value
+    | Bet LAD.PaymentPubKeyHash ClearString HashedString Value
     -- ^ Make a bet, extract the funds if you win.
     deriving stock (Haskell.Show, Generic)
     deriving anyclass (ToJSON, FromJSON)
@@ -215,7 +215,7 @@ transition _ State{stateData=stateZeroData, stateValue=stateZeroValue} gambleInp
                 stateValue = stateZeroValue
                }) -- LAD.unPaymentPubKeyHash $ UTL.unsafePaymentPubKeyHash 
     ( LockedBet mph tn currentHs, Bet tokenRecipient cs hs betValue) -> case (checkBetPass currentHs cs) of
-                                                                             True -> let constraints = Constraints.mustPayToPubKey (UTL.unsafePaymentPubKeyHash tokenRecipient) (token mph tn)
+                                                                             True -> let constraints = Constraints.mustPayToPubKey tokenRecipient (token mph tn)
                                                                                                        <> Constraints.mustMintCurrency mph tn 0
                                                                                          newValue    = stateZeroValue - betValue
                                                                                      in Just (constraints , 
@@ -225,7 +225,7 @@ transition _ State{stateData=stateZeroData, stateValue=stateZeroValue} gambleInp
                                                                                                                else LockedBet mph tn currentHs ,
                                                                                                 stateValue = newValue
                                                                                                                })
-                                                                             False -> let constraints = Constraints.mustPayToPubKey (UTL.unsafePaymentPubKeyHash tokenRecipient) (token mph tn)
+                                                                             False -> let constraints = Constraints.mustPayToPubKey tokenRecipient (token mph tn)
                                                                                                        <> Constraints.mustMintCurrency mph tn 0
                                                                                       in Just ( constraints, 
                                                                                                 State {
@@ -234,3 +234,39 @@ transition _ State{stateData=stateZeroData, stateValue=stateZeroValue} gambleInp
                                                                                                 })
          
     _                                -> Nothing
+
+
+-- | Boilerplate for validator & TH for compiling the code
+type GambleStateMachine = SM.StateMachine GambleState GambleInput
+
+{-# INLINABLE machine #-}
+machine :: GambleParam -> GambleStateMachine
+machine gambleParam = SM.mkStateMachine Nothing (transition gambleParam) isFinal where
+    isFinal EndBet = True
+    isFinal _      = False
+
+{-# INLINABLE mkValidator #-}
+mkValidator :: GambleParam -> Scripts.ValidatorType GambleStateMachine
+mkValidator gambleParam = SM.mkValidator (machine gambleParam)
+
+
+typedValidator :: GambleParam -> Scripts.TypedValidator GambleStateMachine
+typedValidator = Scripts.mkTypedValidatorParam @GambleStateMachine
+    $$(PlutusTx.compile [|| mkValidator ||])
+    $$(PlutusTx.compile [|| wrap ||])
+    where
+        wrap = Scripts.mkUntypedValidator
+
+mintingPolicy :: GambleParam -> Scripts.MintingPolicy
+mintingPolicy gp = Scripts.forwardingMintingPolicy $ typedValidator gp
+
+client :: GambleParam -> SM.StateMachineClient GambleState GambleInput
+client gp = SM.mkStateMachineClient $ SM.StateMachineInstance (machine gp) $ typedValidator gp
+
+
+PlutusTx.unstableMakeIsData ''GambleState
+PlutusTx.makeLift ''GambleState
+PlutusTx.unstableMakeIsData ''GambleInput
+PlutusTx.makeLift ''GambleInput
+PlutusTx.makeLift ''GambleToken
+PlutusTx.unstableMakeIsData ''GambleToken

@@ -106,3 +106,7 @@ data GambleInput =
     deriving anyclass (ToJSON, FromJSON)
 
 ```
+
+9. From line `239-272` is pretty much boilerplate code for the
+  machineClient, which is a way to interact with the statemachine from offchain code
+  typedvalidators, minting policy etc
