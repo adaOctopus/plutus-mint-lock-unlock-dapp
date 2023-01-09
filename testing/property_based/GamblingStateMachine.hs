@@ -13,6 +13,7 @@
 {-# LANGUAGE DeriveAnyClass       #-}
 {-# LANGUAGE RankNTypes           #-}
 {-# LANGUAGE ScopedTypeVariables  #-}
+{-# LANGUAGE NamedFieldPuns  #-}
 {-# LANGUAGE DerivingStrategies   #-}
 {-# LANGUAGE MultiParamTypeClasses   #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving   #-}
@@ -103,7 +104,7 @@ data LockBetArgs =
         -- ^ The parameters for parameterizing the validator.
         , lockArgsGambleSecret    :: SecretArgument Haskell.String
         -- ^ The secret
-        , lockArgsGAmbleValue     :: Value
+        , lockArgsGambleValue     :: Value
         -- ^ Value that is locked by the contract initially
         } deriving stock (Haskell.Show, Generic)
           deriving anyclass (ToJSON, FromJSON)
@@ -118,6 +119,7 @@ data MakeBetArgs =
         {
             makeBetGambleArgs   :: GambleParam,
             passTokenGambleArgs :: LAD.PaymentPubKeyHash,
+            guessedPassGambleArgs :: Haskell.String,
             actualBetGambleArgs :: Value
         } deriving stock (Haskell.Show, Generic)
           deriving anyclass (ToJSON, FromJSON)
@@ -196,7 +198,7 @@ checkBetPass (HashedString actual) (ClearString gss) = actual == sha2_256 gss
 data GambleInput =
       MintToken
     -- ^ Mint the "bet" token
-    | Bet LAD.PaymentPubKeyHash ClearString HashedString Value
+    | Bet LAD.PaymentPubKeyHash ClearString Value
     -- ^ Make a bet, extract the funds if you win.
     deriving stock (Haskell.Show, Generic)
     deriving anyclass (ToJSON, FromJSON)
@@ -214,7 +216,7 @@ transition _ State{stateData=stateZeroData, stateValue=stateZeroValue} gambleInp
                 stateData  = LockedBet mph tn hs,
                 stateValue = stateZeroValue
                }) -- LAD.unPaymentPubKeyHash $ UTL.unsafePaymentPubKeyHash 
-    ( LockedBet mph tn currentHs, Bet tokenRecipient cs hs betValue) -> case (checkBetPass currentHs cs) of
+    ( LockedBet mph tn currentHs, Bet tokenRecipient cs betValue) -> case (checkBetPass currentHs cs) of
                                                                              True -> let constraints = Constraints.mustPayToPubKey tokenRecipient (token mph tn)
                                                                                                        <> Constraints.mustMintCurrency mph tn 0
                                                                                          newValue    = stateZeroValue - betValue
@@ -263,6 +265,35 @@ mintingPolicy gp = Scripts.forwardingMintingPolicy $ typedValidator gp
 client :: GambleParam -> SM.StateMachineClient GambleState GambleInput
 client gp = SM.mkStateMachineClient $ SM.StateMachineInstance (machine gp) $ typedValidator gp
 
+
+-- | Actual endpoint functionality
+
+-- | The @"lockbet"@ endpoint.
+lockBet :: Promise () GambleStateMachineSchema GambleError ()
+lockBet = endpoint @"lockbet" $ \LockBetArgs{lockArgsGambleParam, lockArgsGambleSecret, lockArgsGambleValue} -> do
+    let secret = HashedString (escape_sha2_256 (toBuiltin . C.pack <$> extractSecret lockArgsGambleSecret))
+        sym = Scripts.forwardingMintingPolicyHash $ typedValidator lockArgsGambleParam
+    _ <- SM.runInitialise (client lockArgsGambleParam) (Started sym "bettoken" secret) lockArgsGambleValue
+    void $ SM.runStep (client lockArgsGambleParam) MintToken
+
+
+-- | The @"makebet"@ endpoint
+
+-- | The @"guess"@ endpoint.
+makeBet :: Promise () GambleStateMachineSchema GambleError ()
+makeBet = endpoint @"makebet" $ \MakeBetArgs{makeBetGambleArgs, passTokenGambleArgs, guessedPassGambleArgs, actualBetGambleArgs} -> do
+
+    let guessedSecret = ClearString (toBuiltin (C.pack guessedPassGambleArgs))
+        -- newSecret     = HashedString (escape_sha2_256 (toBuiltin . C.pack <$> extractSecret (guessedPassGambleArgs)))
+
+    void
+        $ SM.runStep (client makeBetGambleArgs)
+            (Bet passTokenGambleArgs guessedSecret actualBetGambleArgs)
+
+
+-- | Turn in to PlutusCore BOILERPLATE
+cc :: PlutusTx.CompiledCode (GambleParam -> GambleState -> GambleInput -> ScriptContext -> ())
+cc = $$(PlutusTx.compile [|| \a b c d -> check (mkValidator a b c d) ||])
 
 PlutusTx.unstableMakeIsData ''GambleState
 PlutusTx.makeLift ''GambleState
