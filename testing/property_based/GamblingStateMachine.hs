@@ -38,6 +38,8 @@ import Data.ByteString.Char8 qualified as C
 import GHC.Generics (Generic)
 import Ledger (Address, POSIXTime, ScriptContext, TokenName, Value)
 import Ledger.Ada qualified as Ada
+import qualified Ledger.Address                       as LAD
+import qualified Utils as UTL
 import Ledger.Address.Orphans ()
 import Ledger.Constraints (TxConstraints)
 import Ledger.Constraints qualified as Constraints
@@ -51,7 +53,7 @@ import Plutus.Contract.StateMachine qualified as SM
 import Plutus.V1.Ledger.Scripts (MintingPolicyHash)
 import PlutusTx qualified
 import PlutusTx.Prelude (Bool (False, True), BuiltinByteString, Eq, Maybe (Just, Nothing), check, sha2_256, toBuiltin,
-                         traceIfFalse, ($), (&&), (-), (.), (<$>), (<>), (==), (>>))
+                         traceIfFalse, ($), (&&), (-), (.), (+), (<$>), (<>), (==), (>>))
 import Schema (ToSchema)
 import Plutus.Contract.Test.Coverage.Analysis
 import PlutusTx.Coverage
@@ -148,8 +150,8 @@ instance SM.AsSMContractError GambleError where
 
 
 -- | Top-level contract, exposing both endpoints.
-contract :: Contract () GambleStateMachineSchema GambleError ()
-contract = selectList [lockie, bettie] >> contract
+-- contract :: Contract () GambleStateMachineSchema GambleError ()
+-- contract = selectList [lockie, bettie] >> contract
 ---------------------- ^ lockie & bettie, are the endpoints for this state machine
 
 -- | The token that represents the right to make a bet
@@ -198,3 +200,37 @@ data GambleInput =
     -- ^ Make a bet, extract the funds if you win.
     deriving stock (Haskell.Show, Generic)
     deriving anyclass (ToJSON, FromJSON)
+
+
+-- | The State Machine Transition Function
+
+{-# INLINABLE transition#-}
+transition :: GambleParam -> State GambleState -> GambleInput -> Maybe (TxConstraints Void Void, State GambleState)
+transition _ State{stateData=stateZeroData, stateValue=stateZeroValue} gambleInput = case (stateZeroData, gambleInput) of
+    ( Started mph tn hs, MintToken ) -> 
+        let constraints = Constraints.mustMintCurrency mph tn 1 in
+        Just ( constraints,
+               State{
+                stateData  = LockedBet mph tn hs,
+                stateValue = stateZeroValue
+               }) -- LAD.unPaymentPubKeyHash $ UTL.unsafePaymentPubKeyHash 
+    ( LockedBet mph tn currentHs, Bet tokenRecipient cs hs betValue) -> case (checkBetPass currentHs cs) of
+                                                                             True -> let constraints = Constraints.mustPayToPubKey (UTL.unsafePaymentPubKeyHash tokenRecipient) (token mph tn)
+                                                                                                       <> Constraints.mustMintCurrency mph tn 0
+                                                                                         newValue    = stateZeroValue - betValue
+                                                                                     in Just (constraints , 
+                                                                                              State { 
+                                                                                                stateData = if V.isZero (Ada.toValue $ Ada.fromValue newValue) 
+                                                                                                               then EndBet
+                                                                                                               else LockedBet mph tn currentHs ,
+                                                                                                stateValue = newValue
+                                                                                                               })
+                                                                             False -> let constraints = Constraints.mustPayToPubKey (UTL.unsafePaymentPubKeyHash tokenRecipient) (token mph tn)
+                                                                                                       <> Constraints.mustMintCurrency mph tn 0
+                                                                                      in Just ( constraints, 
+                                                                                                State {
+                                                                                                    stateData = LockedBet mph tn currentHs,
+                                                                                                    stateValue = stateZeroValue + betValue
+                                                                                                })
+         
+    _                                -> Nothing
