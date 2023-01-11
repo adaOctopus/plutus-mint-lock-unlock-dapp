@@ -118,7 +118,7 @@ instance ContractModel GambleModel where
     data Action GambleModel = Lock      Wallet String Integer
                             | BetA     Wallet String Integer
                             | GiveToken Wallet
-        deriving (Eq, Show, Generic)
+        deriving (Eq, Show, Generic, Data)
     
     initialState = GambleModel
         { _gambleValue     = 0
@@ -128,14 +128,13 @@ instance ContractModel GambleModel where
 
     initialInstances = (`StartContract` ()) . WalletKey <$> wallets
     instanceWallet (WalletKey w) = w
+    instanceContract _ WalletKey{} _ = G.contract
+
     -- | Arbitrary actions to test based on available endpoints
     arbitraryAction s = oneof $
         [ Lock      <$> genWallet <*> genGuess <*> genValue              ] ++
         [ BetA     <$> genWallet <*> genGuess <*> genValue ] ++
         [ GiveToken <$> genWallet                                        ]
-
-
-    instanceContract _ WalletKey{} _ = G.contract
 
 
     -- | Perform is how the generated actions are linked to our actual contract under testing, in our case GambleStateMachine
@@ -157,6 +156,8 @@ instance ContractModel GambleModel where
             let w = fromJust (s ^. contractState . hasToken)
             payToWallet w w' betTokenVal
             delay 1
+
+
 
     -- | First state after the initial state, locks funds and mints
     nextState (Lock w secret val) = do
@@ -185,6 +186,13 @@ instance ContractModel GambleModel where
         transfer w0 w betTokenVal
         hasToken $= Just w
 
+-- | This is required for getALlSYmTokens
+instance CrashTolerance GambleModel where
+  available (Lock w _ _) alive    = (Key $ WalletKey w) `elem` alive
+  available (BetA w _ _) alive = (Key $ WalletKey w) `elem` alive
+  available _ _                   = True
+
+  restartArguments _ WalletKey{} = ()
 
 betTokenVal :: Value
 betTokenVal =
