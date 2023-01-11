@@ -18,7 +18,8 @@ library
                        Offchain.EmulatorLockScript,
                        Utils,
                        NFTIdent,
-                       GamblingStateMachine
+                       GamblingStateMachine,
+                       TestGamblingSM
   build-depends:       aeson
                      , base ^>=4.14.1.0
                      , bytestring
@@ -42,6 +43,12 @@ library
                      , row-types
                      , cardano-crypto-class
                      , lens
+                     , prettyprinter
+                     , tasty
+                     , tasty-golden
+                     , tasty-hunit
+                     , tasty-quickcheck
+                     , QuickCheck
   default-language:    Haskell2010
   ghc-options:         -Wall -fobject-code -fno-ignore-interface-pragmas -fno-omit-interface-pragmas -fno-strictness -fno-spec-constr -fno-specialise
 

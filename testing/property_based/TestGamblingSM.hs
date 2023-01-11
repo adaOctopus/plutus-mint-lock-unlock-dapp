@@ -1,0 +1,140 @@
+{-# LANGUAGE DataKinds            #-}
+{-# LANGUAGE DeriveDataTypeable   #-}
+{-# LANGUAGE DeriveFunctor        #-}
+{-# LANGUAGE DeriveGeneric        #-}
+{-# LANGUAGE FlexibleContexts     #-}
+{-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE GADTs                #-}
+{-# LANGUAGE ImportQualifiedPost  #-}
+{-# LANGUAGE LambdaCase           #-}
+{-# LANGUAGE MultiWayIf           #-}
+{-# LANGUAGE NumericUnderscores   #-}
+{-# LANGUAGE OverloadedStrings    #-}
+{-# LANGUAGE RankNTypes           #-}
+{-# LANGUAGE ScopedTypeVariables  #-}
+{-# LANGUAGE StandaloneDeriving   #-}
+{-# LANGUAGE TemplateHaskell      #-}
+{-# LANGUAGE TypeApplications     #-}
+{-# LANGUAGE TypeFamilies         #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS_GHC -Wno-unused-top-binds #-}
+
+
+module TestGamblingSM where
+
+
+-- | These two imports require a latest git tag from plutus apps where emulator is available
+-- import Cardano.Node.Emulator.Params qualified as Params
+-- import Cardano.Node.Emulator.TimeSlot qualified as TimeSlot
+import Control.Exception hiding (handle)
+import Control.Lens
+import Control.Monad
+import Control.Monad.Freer.Extras.Log (LogLevel (..))
+import Data.Data
+import Data.Map qualified as Map
+import Data.Maybe
+import Data.Set qualified as Set
+import Prettyprinter
+import Test.QuickCheck as QC hiding (checkCoverage, (.&&.))
+import Test.Tasty hiding (after)
+import Test.Tasty.HUnit qualified as HUnit
+import Test.Tasty.QuickCheck (testProperty)
+import Data.Default (Default (def))
+import GHC.Generics (Generic)
+import Ledger qualified
+import Ledger.Ada qualified as Ada
+import Ledger.Typed.Scripts qualified as Scripts
+import Ledger.Value (Value)
+import Plutus.Contract.Secrets
+import Plutus.Contract.Test hiding (not)
+-- | This import is for unit testing, I still dont understand it, so I dont use it.
+-- import Plutus.Contract.Test.Certification
+import Plutus.Contract.Test.ContractModel
+import Plutus.Contract.Test.ContractModel.CrashTolerance
+import GamblingStateMachine as G
+import Plutus.Trace.Emulator as Trace
+import Wallet.Emulator.Wallet
+import PlutusTx.Coverage
+import qualified Utils as UTL
+
+
+-- | Parameters of gamble contract
+gameParam :: G.GambleParam
+gameParam = G.GambleParam (UTL.unsafePaymentPubKeyHash $ mockWalletAddress w1)
+
+options :: CheckOptions
+options = defaultCheckOptionsContractModel & (increaseTransactionLimits . increaseTransactionLimits)
+
+--
+-- * QuickCheck model
+
+data GambleModel = GambleModel
+    { _gambleValue     :: Integer
+    , _hasToken      :: Maybe Wallet
+    , _currentSecret :: String
+    }
+    deriving (Show, Data)
+
+makeLenses 'GambleModel
+
+
+deriving instance Eq (ContractInstanceKey GambleModel w schema err params)
+deriving instance Ord (ContractInstanceKey GambleModel w schema err params)
+deriving instance Show (ContractInstanceKey GambleModel w schema err params)
+
+
+-- | Our needed data and helper functions
+
+wallets :: [Wallet]
+wallets = [w1, w2, w3]
+
+genWallet :: Gen Wallet
+genWallet = QC.elements wallets
+
+shrinkWallet :: Wallet -> [Wallet]
+shrinkWallet w = [w' | w' <- wallets, w' < w]
+
+genGuess :: Gen String
+genGuess = QC.elements ["hello", "secret", "hunter2", "*******"]
+
+genValue :: Gen Integer
+genValue = getNonNegative <$> arbitrary
+-- Here, minAdaTxOutEstimated, is not available in my current build, proparly new stuff aded by plutus team
+-- genValue = choose (Ada.getLovelace Ledger.minAdaTxOutEstimated, 100_000_000)
+
+
+-- | Define the ContractModel
+
+instance ContractModel GambleModel where
+    
+    -- | Every contract instance is identified by ContractInstanceKey
+    -- | That way quickCheck knows what code to run, the schema of the endpoints and the error types available
+    data ContractInstanceKey GambleModel w schema err params where
+        WalletKey :: Wallet -> ContractInstanceKey GambleModel () GambleStateMachineSchema GambleError ()
+
+    -- The commands available to a test case
+    data Action GambleModel = Lock      Wallet String Integer
+                              | BetA     Wallet String String Integer
+                              | GiveToken Wallet
+        deriving (Eq, Show, Generic)
+    
+    initialState = GambleModel
+        { _gambleValue     = 0
+        , _hasToken      = Nothing
+        , _currentSecret = ""
+        }
+
+    initialInstances = (`StartContract` ()) . WalletKey <$> wallets
+    instanceWallet (WalletKey w) = w
+    instanceContract _ WalletKey{} _ = G.contract
+
+
+    -- | Perform is how the generated actions are linked to our actual contract under testing, in our case GambleStateMachine
+
+
+
+    -- | Arbitrary actions to test based on available endpoints
+    arbitraryAction s = oneof $
+        [ Lock      <$> genWallet <*> genGuess <*> genValue              ] ++
+        [ BetA     <$> genWallet <*> genGuess <*> genGuess <*> genValue ] ++
+        [ GiveToken <$> genWallet                                        ]

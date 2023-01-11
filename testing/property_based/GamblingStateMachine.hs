@@ -152,9 +152,9 @@ instance SM.AsSMContractError GambleError where
 
 
 -- | Top-level contract, exposing both endpoints.
--- contract :: Contract () GambleStateMachineSchema GambleError ()
--- contract = selectList [lockie, bettie] >> contract
----------------------- ^ lockie & bettie, are the endpoints for this state machine
+contract :: Contract () GambleStateMachineSchema GambleError ()
+contract = selectList [lockBet, makeBet] >> contract
+---------------------- ^ are the endpoints for this state machine
 
 -- | The token that represents the right to make a bet
 newtype GambleToken = GambleToken { unGambleToken :: Value }
