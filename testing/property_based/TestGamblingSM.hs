@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds            #-}
 {-# LANGUAGE DeriveDataTypeable   #-}
 {-# LANGUAGE DeriveFunctor        #-}
+{-# LANGUAGE DeriveAnyClass        #-}
 {-# LANGUAGE DeriveGeneric        #-}
 {-# LANGUAGE FlexibleContexts     #-}
 {-# LANGUAGE FlexibleInstances    #-}
@@ -59,8 +60,8 @@ import qualified Utils as UTL
 
 
 -- | Parameters of gamble contract
-gameParam :: G.GambleParam
-gameParam = G.GambleParam (UTL.unsafePaymentPubKeyHash $ mockWalletAddress w1)
+gambleParam :: G.GambleParam
+gambleParam = G.GambleParam (UTL.unsafePaymentPubKeyHash $ mockWalletAddress w1)
 
 options :: CheckOptions
 options = defaultCheckOptionsContractModel & (increaseTransactionLimits . increaseTransactionLimits)
@@ -81,6 +82,7 @@ makeLenses 'GambleModel
 deriving instance Eq (ContractInstanceKey GambleModel w schema err params)
 deriving instance Ord (ContractInstanceKey GambleModel w schema err params)
 deriving instance Show (ContractInstanceKey GambleModel w schema err params)
+deriving instance HasActions GambleModel
 
 
 -- | Our needed data and helper functions
@@ -114,8 +116,8 @@ instance ContractModel GambleModel where
 
     -- The commands available to a test case
     data Action GambleModel = Lock      Wallet String Integer
-                              | BetA     Wallet String String Integer
-                              | GiveToken Wallet
+                            | BetA     Wallet String Integer
+                            | GiveToken Wallet
         deriving (Eq, Show, Generic)
     
     initialState = GambleModel
@@ -126,15 +128,68 @@ instance ContractModel GambleModel where
 
     initialInstances = (`StartContract` ()) . WalletKey <$> wallets
     instanceWallet (WalletKey w) = w
+    -- | Arbitrary actions to test based on available endpoints
+    arbitraryAction s = oneof $
+        [ Lock      <$> genWallet <*> genGuess <*> genValue              ] ++
+        [ BetA     <$> genWallet <*> genGuess <*> genValue ] ++
+        [ GiveToken <$> genWallet                                        ]
+
+
     instanceContract _ WalletKey{} _ = G.contract
 
 
     -- | Perform is how the generated actions are linked to our actual contract under testing, in our case GambleStateMachine
+    perform handle _ s cmd = case cmd of
+        Lock w new val -> do
+            callEndpoint @"lockbet" (handle $ WalletKey w)
+                LockBetArgs { lockArgsGambleParam = gambleParam
+                         , lockArgsGambleSecret   = secretArg new
+                         , lockArgsGambleValue    = Ada.lovelaceValueOf val
+                         }
+            delay 2
+        BetA w old val -> do
+            callEndpoint @"makebet" (handle $ WalletKey w)
+                MakeBetArgs{ makeBetGambleArgs     = gambleParam
+                         , guessedPassGambleArgs     = old
+                         , actualBetGambleArgs = Ada.lovelaceValueOf val }
+            delay 1
+        GiveToken w' -> do
+            let w = fromJust (s ^. contractState . hasToken)
+            payToWallet w w' betTokenVal
+            delay 1
+
+    -- | First state after the initial state, locks funds and mints
+    nextState (Lock w secret val) = do
+        hasToken      .= Just w
+        currentSecret .= secret
+        gambleValue     .= val
+        mint betTokenVal
+        deposit w betTokenVal
+        withdraw w $ Ada.lovelaceValueOf val
+        wait 2
+    
+    -- | Next possible state of Betting action
+    nextState (BetA w old val) = do
+        correctGuess <- (old ==)    <$> viewContractState currentSecret
+        holdsToken   <- (Just w ==) <$> viewContractState hasToken
+        enoughAda    <- (val <=)    <$> viewContractState gambleValue
+        when (correctGuess && holdsToken && enoughAda) $ do
+            currentSecret $= old
+            gambleValue     $~ subtract val
+            deposit w $ Ada.lovelaceValueOf val
+        wait 1
+
+    -- | State when passing the betting token
+    nextState (GiveToken w) = do
+        w0 <- fromJust <$> viewContractState hasToken
+        transfer w0 w betTokenVal
+        hasToken $= Just w
 
 
+betTokenVal :: Value
+betTokenVal =
+    let sym = Scripts.forwardingMintingPolicyHash $ G.typedValidator gambleParam
+    in G.token sym "bet"
 
-    -- | Arbitrary actions to test based on available endpoints
-    arbitraryAction s = oneof $
-        [ Lock      <$> genWallet <*> genGuess <*> genValue              ] ++
-        [ BetA     <$> genWallet <*> genGuess <*> genGuess <*> genValue ] ++
-        [ GiveToken <$> genWallet                                        ]
+prop_Game :: Actions GambleModel -> Property
+prop_Game = propRunActions_
