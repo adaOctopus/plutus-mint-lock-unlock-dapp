@@ -5,3 +5,4 @@ Codefile: `TestGamblingSM.hs`
 
 #### Components
 
+imports in repl, TestGamblingSM, Test.QuickCheck, Plutus.Contract.Test.ContractModel

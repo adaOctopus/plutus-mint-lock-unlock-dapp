@@ -82,7 +82,7 @@ makeLenses 'GambleModel
 deriving instance Eq (ContractInstanceKey GambleModel w schema err params)
 deriving instance Ord (ContractInstanceKey GambleModel w schema err params)
 deriving instance Show (ContractInstanceKey GambleModel w schema err params)
-deriving instance HasActions GambleModel
+-- deriving instance HasActions GambleModel
 
 
 -- | Our needed data and helper functions
@@ -105,8 +105,14 @@ genValue = getNonNegative <$> arbitrary
 -- genValue = choose (Ada.getLovelace Ledger.minAdaTxOutEstimated, 100_000_000)
 
 
--- | Define the ContractModel
+-- | Define custom instance for getAllSymtokens -> Required, not fully understood yet.
+instance {-# OVERLAPPING #-} ContractModel GambleModel => HasActions GambleModel where
+    getAllSymtokens (Lock w s i) = getAllSymtokens (Lock w s i)
+    getAllSymtokens (BetA w s i) = getAllSymtokens (BetA w s i)
+    getAllSymtokens (GiveToken w) = getAllSymtokens (GiveToken w)
+    getAllSymtokens _                    = mempty
 
+-- | Define the ContractModel
 instance ContractModel GambleModel where
     
     -- | Every contract instance is identified by ContractInstanceKey
@@ -163,7 +169,7 @@ instance ContractModel GambleModel where
     nextState (Lock w secret val) = do
         hasToken      .= Just w
         currentSecret .= secret
-        gambleValue     .= val
+        gambleValue   .= val
         mint betTokenVal
         deposit w betTokenVal
         withdraw w $ Ada.lovelaceValueOf val
@@ -185,6 +191,23 @@ instance ContractModel GambleModel where
         w0 <- fromJust <$> viewContractState hasToken
         transfer w0 w betTokenVal
         hasToken $= Just w
+    
+    -- | Precondition to be fulfilled
+    precondition s (GiveToken _) = isJust tok
+        where
+            tok = s ^. contractState . hasToken
+    precondition s _             = True
+
+
+    -- | Shrinking failing test to simplify things
+    shrinkAction _s (Lock w secret val) =
+        [Lock w' secret val | w' <- shrinkWallet w] ++
+        [Lock w secret val' | val' <- shrink val]
+    shrinkAction _s (GiveToken w) =
+        [GiveToken w' | w' <- shrinkWallet w]
+    shrinkAction _s (BetA w old val) =
+        [BetA w' old val | w' <- shrinkWallet w] ++
+        [BetA w old val' | val' <- shrink val]
 
 -- | This is required for getALlSYmTokens
 instance CrashTolerance GambleModel where
