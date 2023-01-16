@@ -19,7 +19,8 @@ library
                        Utils,
                        NFTIdent,
                        GamblingStateMachine,
-                       TestGamblingSM
+                       TestGamblingSM,
+                       QuickCheckExample
   build-depends:       aeson
                      , base ^>=4.14.1.0
                      , bytestring

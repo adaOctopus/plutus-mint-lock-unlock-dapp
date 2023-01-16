@@ -15,6 +15,7 @@
 {-# LANGUAGE ScopedTypeVariables  #-}
 {-# LANGUAGE StandaloneDeriving   #-}
 {-# LANGUAGE TemplateHaskell      #-}
+{-# LANGUAGE InstanceSigs         #-}
 {-# LANGUAGE TypeApplications     #-}
 {-# LANGUAGE TypeFamilies         #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -74,7 +75,7 @@ data GambleModel = GambleModel
     , _hasToken      :: Maybe Wallet
     , _currentSecret :: String
     }
-    deriving (Show, Data)
+    deriving (Show, Data, Generic)
 
 makeLenses 'GambleModel
 
@@ -82,7 +83,7 @@ makeLenses 'GambleModel
 deriving instance Eq (ContractInstanceKey GambleModel w schema err params)
 deriving instance Ord (ContractInstanceKey GambleModel w schema err params)
 deriving instance Show (ContractInstanceKey GambleModel w schema err params)
--- deriving instance HasActions GambleModel
+deriving instance Arbitrary GambleModel
 
 
 -- | Our needed data and helper functions
@@ -105,7 +106,7 @@ genValue = getNonNegative <$> arbitrary
 -- genValue = choose (Ada.getLovelace Ledger.minAdaTxOutEstimated, 100_000_000)
 
 
--- | Define custom instance for getAllSymtokens -> Required, not fully understood yet.
+-- -- | Define custom instance for getAllSymtokens -> Required, not fully understood yet.
 instance {-# OVERLAPPING #-} ContractModel GambleModel => HasActions GambleModel where
     getAllSymtokens (Lock w s i) = getAllSymtokens (Lock w s i)
     getAllSymtokens (BetA w s i) = getAllSymtokens (BetA w s i)
@@ -124,8 +125,8 @@ instance ContractModel GambleModel where
     data Action GambleModel = Lock      Wallet String Integer
                             | BetA     Wallet String Integer
                             | GiveToken Wallet
-        deriving (Eq, Show, Generic, Data)
-    
+        deriving (Eq, Show, Data, Arbitrary)
+
     initialState = GambleModel
         { _gambleValue     = 0
         , _hasToken      = Nothing
@@ -133,15 +134,23 @@ instance ContractModel GambleModel where
         }
 
     initialInstances = (`StartContract` ()) . WalletKey <$> wallets
-    instanceWallet (WalletKey w) = w
+
     instanceContract _ WalletKey{} _ = G.contract
 
-    -- | Arbitrary actions to test based on available endpoints
-    arbitraryAction s = oneof $
-        [ Lock      <$> genWallet <*> genGuess <*> genValue              ] ++
-        [ BetA     <$> genWallet <*> genGuess <*> genValue ] ++
-        [ GiveToken <$> genWallet                                        ]
+    instanceWallet (WalletKey w) = w
 
+    -- | Arbitrary actions to test based on available endpoints
+    arbitraryAction :: ModelState GambleModel -> Gen (Action GambleModel)
+    arbitraryAction s = oneof $
+        [ Lock      <$> genWallet <*> genGuess <*> genValue ] ++
+        [ frequency $
+          [ (10, BetA w   <$> genGuess  <*> choose (0, val))
+          | Just w <- [tok] ] ++
+          [ (1, BetA <$> genWallet <*> genGuess <*> genValue) ] ] ++
+        [ GiveToken <$> genWallet ]
+        where
+            tok = s ^. contractState . hasToken
+            val = s ^. contractState . gambleValue
 
     -- | Perform is how the generated actions are linked to our actual contract under testing, in our case GambleStateMachine
     perform handle _ s cmd = case cmd of
@@ -222,5 +231,23 @@ betTokenVal =
     let sym = Scripts.forwardingMintingPolicyHash $ G.typedValidator gambleParam
     in G.token sym "bet"
 
-prop_Game :: Actions GambleModel -> Property
-prop_Game = propRunActions_
+prop_Gamble :: Actions GambleModel -> Property
+prop_Gamble = propRunActions_
+
+-- | Property wiith a more well designed LOgMessage
+propGamble' :: LogLevel -> Actions GambleModel -> Property
+propGamble' l s = propRunActionsWithOptions
+                    (set minLogLevel l defaultCheckOptionsContractModel)
+                    defaultCoverageOptions
+                    (\ _ -> pure True)
+                    s
+
+testLock :: Property
+testLock = withMaxSuccess 1 . prop_Gamble $ actionsFromList [Lock w1 "hunter2" 0]
+
+
+-- test :: IO ()
+-- test = quickCheck propGamble'
+
+-- tests :: TestTree
+-- tests = testProperty "gambling model" propGamble'

@@ -24,7 +24,7 @@ Because we love practice, and this is to also help the community to grow we will
 
 1. Get inside cabal repl
 2. IMport NFTIdent & Utils
-3. Run the following `NFTIdent.writeSerialisedScript  (Utils.unsafeReadTxOutRef $ "1203ac5c18f1dc498da0cc2330505480eaf7dfe0b6febdc8a60926933b082d66#2") (Utils.unsafeReadAddress $ "addr_test1wrgzpjxkl3249pfsjgmv7mueautkt28kgx2xhehjqhxanecznac34")`
+3. Run the following `NFTIdent.writeSerialisedScript  (Utils.unsafeReadTxOutRef $ "f5f8b29457d6a37a4068bf2b4a497e4fc346043679eb94bc6da84547dd35cbc0#2") (Utils.unsafeReadAddress $ "addr_test1wrgzpjxkl3249pfsjgmv7mueautkt28kgx2xhehjqhxanecznac34")`
 
 // THis is using NAMI wallet (browser case)
 `NFTIdent.writeSerialisedScript  (Utils.unsafeReadTxOutRef $ "969798dbfe9af3662d2fb016425792e207f8f440c6926ac58f26b573526968d2#1") (Utils.unsafeReadAddress $ "addr_test1wrgzpjxkl3249pfsjgmv7mueautkt28kgx2xhehjqhxanecznac34")`
