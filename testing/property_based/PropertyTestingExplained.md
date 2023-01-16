@@ -96,3 +96,110 @@ Every contract instance in a test is named by a ContractInstanceKey, another ass
 
     instanceWallet (WalletKey w) = w
 This specifies (reading top to bottom) that we should create one contract instance per wallet w, that will run G.contract, in wallet w.
+
+7. In order to make sure that there is an arbitrary instance of our Model so we can generate random actions we need to include this function 
+
+```
+    arbitraryAction :: ModelState GambleModel -> Gen (Action GambleModel)
+    arbitraryAction s = oneof $
+        [ Lock      <$> genWallet <*> genGuess <*> genValue ] ++
+        [ frequency $
+          [ (10, BetA w   <$> genGuess  <*> choose (0, val))
+          | Just w <- [tok] ] ++
+          [ (1, BetA <$> genWallet <*> genGuess <*> genValue) ] ] ++
+        [ GiveToken <$> genWallet ]
+        where
+            tok = s ^. contractState . hasToken
+            val = s ^. contractState . gambleValue
+
+-- And we need these to be able to generate random ones as parameters
+
+genWallet :: Gen Wallet
+genWallet = elements wallets
+
+genGuess :: Gen String
+genGuess = elements ["hello", "secret", "hunter2", "*******"]
+
+genValue :: Gen Integer
+genValue = getNonNegative <$> arbitrary
+
+```
+
+8. NOw we need to define the initial state of the contract when the token does not exist, and functions to move from one state to the other (initialSTate, and nextState)
+
+
+```
+    initialState = GameModel
+        { _gameValue     = 0
+        , _hasToken      = Nothing
+        , _currentSecret = ""
+        }
+
+            -- | First state after the initial state, locks funds and mints
+    nextState (Lock w secret val) = do
+        hasToken      .= Just w
+        currentSecret .= secret
+        gambleValue   .= val
+        mint betTokenVal
+        deposit w betTokenVal
+        withdraw w $ Ada.lovelaceValueOf val
+        wait 2
+    
+    -- | Next possible state of Betting action
+    nextState (BetA w old val) = do
+        correctGuess <- (old ==)    <$> viewContractState currentSecret
+        holdsToken   <- (Just w ==) <$> viewContractState hasToken
+        enoughAda    <- (val <=)    <$> viewContractState gambleValue
+        when (correctGuess && holdsToken && enoughAda) $ do
+            currentSecret $= old
+            gambleValue     $~ subtract val
+            deposit w $ Ada.lovelaceValueOf val
+        wait 1
+
+    -- | State when passing the betting token
+    nextState (GiveToken w) = do
+        w0 <- fromJust <$> viewContractState hasToken
+        transfer w0 w betTokenVal
+        hasToken $= Just w
+
+```
+
+9. As we just saw, not every sequence of actions makes sense as a test case; we need a way to restrict test cases to be ‘sensible’. 
+
+To introduce preconditions, we add a definition of the precondition method to our ContractModel instance.
+
+```
+precondition :: ModelState state -> Action state -> Bool
+```
+The precondition is parameterised on the entire model state, which includes the contents of wallets as well as our contract state, so we will need to extract this state as well as the fields we need from it. For now, we just restrict GiveToken actions to states in which the token exists:
+
+```
+    precondition s (GiveToken _) = isJust tok
+        where
+            tok = s ^. contractState . hasToken
+    precondition s _             = True
+```
+
+10. Executing and testing
+
+i.e in the repl we would run quickCheck prop_Gamble
+
+```
+prop_Gamble :: Actions GambleModel -> Property
+prop_Gamble = propRunActions_
+
+-- | Property wiith a more well designed LOgMessage
+propGamble' :: LogLevel -> Actions GambleModel -> Property
+propGamble' l s = propRunActionsWithOptions
+                    (set minLogLevel l defaultCheckOptionsContractModel)
+                    defaultCoverageOptions
+                    (\ _ -> pure True)
+                    s
+
+testLock :: Property
+testLock = withMaxSuccess 1 . prop_Gamble $ actionsFromList [Lock w1 "hunter2" 0]
+
+```
+
+This was a brief explanation of the testing method. THere is way more to it, but time is finite.
+Enjoy...
