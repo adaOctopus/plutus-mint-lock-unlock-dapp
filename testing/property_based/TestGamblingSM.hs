@@ -211,10 +211,18 @@ instance ContractModel GambleModel where
         hasToken $= Just w
     
     -- | Precondition to be fulfilled
-    precondition s (GiveToken _) = isJust tok
-        where
-            tok = s ^. contractState . hasToken
-    precondition s _             = True
+    -- precondition s (GiveToken _) = isJust tok
+    --     where
+    --         tok = s ^. contractState . hasToken
+    -- precondition s _             = True
+
+    precondition s cmd = case cmd of
+        Lock _ _ v    -> isNothing tok
+        BetA w _ v -> tok == Just w && v <= val
+        GiveToken w   -> isJust tok
+      where
+        tok = s ^. contractState . hasToken
+        val = s ^. contractState . gambleValue
 
 
     -- | Shrinking failing test to simplify things
@@ -254,7 +262,7 @@ propGamble' l s = propRunActionsWithOptions
                     s
 
 testLock :: Property
-testLock = withMaxSuccess 1 . prop_Gamble $ actionsFromList [Lock w1 "hunter2" 0]
+testLock = withMaxSuccess 1 . prop_Gamble $ actionsFromList [Lock w2 "*******" 0]
 
 
 -- test :: IO ()
