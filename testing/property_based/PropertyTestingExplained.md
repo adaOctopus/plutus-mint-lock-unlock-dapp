@@ -201,5 +201,10 @@ testLock = withMaxSuccess 1 . prop_Gamble $ actionsFromList [Lock w1 "hunter2" 0
 
 ```
 
+11. When testing make sure u can generate actions of your model with
+
+``` sample (arbitrary :: Gen (Actions GambleModel)) ```
+
+and make sure quickCheck works with ``` quickCheck prop_Gamble```
 This was a brief explanation of the testing method. THere is way more to it, but time is finite.
 Enjoy...
