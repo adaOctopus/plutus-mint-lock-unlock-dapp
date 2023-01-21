@@ -107,11 +107,20 @@ genValue = getNonNegative <$> arbitrary
 
 
 -- -- | Define custom instance for getAllSymtokens -> Required, not fully understood yet.
-instance {-# OVERLAPPING #-} ContractModel GambleModel => HasActions GambleModel where
-    getAllSymtokens (Lock w s i) = getAllSymtokens (Lock w s i)
-    getAllSymtokens (BetA w s i) = getAllSymtokens (BetA w s i)
-    getAllSymtokens (GiveToken w) = getAllSymtokens (GiveToken w)
-    getAllSymtokens _                    = mempty
+-- instance {-# OVERLAPPING #-} ContractModel GambleModel => HasActions GambleModel where
+--     getAllSymtokens (Lock w s i) = getAllSymtokens (Lock w s i)
+--     getAllSymtokens (BetA w s i) = getAllSymtokens (BetA w s i)
+--     getAllSymtokens (GiveToken w) = getAllSymtokens (GiveToken w)
+--     getAllSymtokens _                    = mempty
+
+
+instance Arbitrary (Action GambleModel) where
+    arbitrary = oneof 
+      [ Lock <$> aWallet <*> arbitrary <*> arbitrary,
+        BetA <$> aWallet <*> arbitrary <*> arbitrary,
+        GiveToken <$> aWallet]
+      where
+        aWallet = QC.elements [w1,w2,w3,w4, w5]
 
 -- | Define the ContractModel
 instance ContractModel GambleModel where
@@ -125,7 +134,7 @@ instance ContractModel GambleModel where
     data Action GambleModel = Lock      Wallet String Integer
                             | BetA     Wallet String Integer
                             | GiveToken Wallet
-        deriving (Eq, Show, Data, Arbitrary)
+        deriving (Eq, Show, Data)
 
     initialState = GambleModel
         { _gambleValue     = 0
@@ -232,7 +241,9 @@ betTokenVal =
     in G.token sym "bet"
 
 prop_Gamble :: Actions GambleModel -> Property
-prop_Gamble = propRunActions_
+prop_Gamble = propRunActionsWithOptions options defaultCoverageOptions (\ _ -> pure True)
+
+
 
 -- | Property wiith a more well designed LOgMessage
 propGamble' :: LogLevel -> Actions GambleModel -> Property
