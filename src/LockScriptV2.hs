@@ -90,7 +90,7 @@ data UserAction = Unlock AmountToUnlock Password deriving (Show, FromJSON, ToJSO
 PlutusTx.makeLift ''UserAction
 PlutusTx.makeIsDataIndexed ''UserAction
  [
-   ( 'Unlock, 1 )
+   ( 'Unlock, 0 )
  ]
 
 {-# INLINEABLE lockScript #-}
@@ -108,7 +108,7 @@ lockScript dt rd ctx = traceIfFalse "Oops wrong password" checkPass &&
 
       checkPass :: Bool
       checkPass = case rd of 
-                    Unlock amt psw -> psw == (42 :: Integer)
+                    Unlock amt psw -> psw == 42
                     _              -> False
 
       checkAmou :: Bool
