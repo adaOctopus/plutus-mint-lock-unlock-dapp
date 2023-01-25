@@ -57,3 +57,7 @@ Once you are done with serialization, once you have updated `cardano-cli-tx/comp
 
 You need to have a cardano node up and running to do this, and remember to export the CARDANO_SOCKET_PATH inside this directory.
 
+
+### Approach one: Browser DAPP with lucid/meshJS/Nami/nextJS
+
+For this , check this repo https://github.com/tas2017/plutus-dapp-lucid
