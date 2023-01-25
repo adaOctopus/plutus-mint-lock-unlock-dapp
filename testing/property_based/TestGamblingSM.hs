@@ -97,6 +97,9 @@ genWallet = QC.elements wallets
 shrinkWallet :: Wallet -> [Wallet]
 shrinkWallet w = [w' | w' <- wallets, w' < w]
 
+guesses :: [String]
+guesses = ["hello", "secret", "hunter2", "*******"]
+
 genGuess :: Gen String
 genGuess = QC.elements ["hello", "secret", "hunter2", "*******"]
 
@@ -246,7 +249,7 @@ instance CrashTolerance GambleModel where
 betTokenVal :: Value
 betTokenVal =
     let sym = Scripts.forwardingMintingPolicyHash $ G.typedValidator gambleParam
-    in G.token sym "bet"
+    in G.token sym "bettoken"
 
 prop_Gamble :: Actions GambleModel -> Property
 prop_Gamble = propRunActionsWithOptions options defaultCoverageOptions (\ _ -> pure True)
@@ -264,9 +267,62 @@ propGamble' l s = propRunActionsWithOptions
 testLock :: Property
 testLock = withMaxSuccess 1 . prop_Gamble $ actionsFromList [Lock w2 "*******" 0]
 
+-------------
+--- | A very powerful method of testing is unit tests but with the dynamic logic monad DL
+--- | We can specify actions, generate random parameters and generate random action sequences as well
+--- | WHen using COntractModel, quickCheck only generates random actions that fulfill the preconditions
+--- | DL Monad does not. THat's why it is powerful.
 
--- test :: IO ()
--- test = quickCheck propGamble'
+-- Basic unit test example
+unitTest :: DL GambleModel ()
+unitTest = do
+    action $ Lock w1 "hello" 10
+    action $ GiveToken w2
+    action $ BetA w2 "hello" 3
 
--- tests :: TestTree
--- tests = testProperty "gambling model" propGamble'
+unitTest2 :: DL GambleModel ()
+unitTest2 = do
+     val <- forAllQ $ chooseQ (3, 20)
+     --  chooseQ :: (Arbitrary a, Random a, Ord a) => (a, a) -> Quantification a [ Generates random values between 1 & 20 ]
+     action $ Lock w1 "hello" val
+     action $ GiveToken w2
+     action $ BetA w2 "hello" 3
+
+propDL :: DL GambleModel () -> Property
+propDL dl = forAllDL dl prop_Gamble
+
+-- | To run unitTest run in the repl: quickCheck . withMaxSuccess 1 $ propDL unitTest
+-- | To run uniteTest2 run in the repl: quickCheck $ propDL unitTest2
+
+-- | We saw that testing unitTest2 fails because the random number is 1, and we are trying to withdraw 3 (that cant work)
+-- | As we saw with contract model we copy paste the latest test failed from the log in our repl and we retest it
+-- badUnitTest :: DLTest GambleModel
+-- badUnitTest = 
+--     BadPrecondition
+--         [Witness (1 :: Integer), 
+--         Do $ Lock (Wallet 1) "hello" 1, 
+--         Do $ GiveToken (Wallet 2)]
+--         [Action (BetA (Wallet 2) "hello" 3)]
+--         (GambleModel {_gambleValue = 1, _hasToken = Just (Wallet 2), _currentSecret = "hello"})
+
+-- | To test the above we run this in the repl : quickCheck $ withDLTest unitTest prop_Game badUnitTest
+-- | But as expected it does not work, we need to increase our random generated number range from (1,20) to (3,20)
+
+
+-- | Lets say we want to test if after the whole sequence of actions the contract is empty and all bets are unlocked
+
+noLockedBets :: DL GambleModel ()
+noLockedBets = do
+    (w0, funds, pass) <- forAllQ (elementsQ wallets, chooseQ (3, 20), elementsQ guesses)
+    action $ Lock w0 pass funds
+    anyActions_
+    w      <- forAllQ $ elementsQ wallets
+    secret <- viewContractState currentSecret
+    val    <- viewContractState gambleValue
+    when (val > 0) $ do
+        monitor $ label "Unlocking funds"
+        action $ GiveToken w
+        action $ BetA w secret val
+    assertModel "Locked funds should be zero" $ symIsZero . lockedValue
+
+-- | To test the above run in the repl: > quickCheck $ forAllDL noLockedBets prop_Gamble
