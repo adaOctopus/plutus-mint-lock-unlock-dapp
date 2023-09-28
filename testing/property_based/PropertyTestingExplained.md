@@ -11,7 +11,7 @@ This is my first time trying out property based testing, and I must admit, is no
 
 There are a lot of moving components required to make it work.
 
-Simply put.
+Simply put tho:
 
 When we do property based testing, we running a simulation of our SYstem (COntract  functionality) and a Model of what we expect to achieve, and at the end
 we compare those two.
@@ -63,7 +63,7 @@ instance ContractModel GambleModel where
 
 ```
 
-4. Assuming you are familiar with quickCHeck and how it works with the Gen monad and randomly generated data, here it is a similar concept.
+4. Assuming you are familiar with quickCheck and how it works with the Gen monad and randomly generated data, here it is a similar concept.
 
 A generated test is called Actions, and is, as the name suggests, essentially a sequence of Action values. We can run tests by using propRunActions_:
 
